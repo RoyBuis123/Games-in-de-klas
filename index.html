@@ -782,19 +782,25 @@
 
         function loadGameContent(gameNum) {
             const gameFrame = document.getElementById('gameFrame');
-            gameFrame.innerHTML = `
-                <div style="text-align: center; padding: 50px;">
-                    <h2>Dit is ${GAMES_CONFIG[gameNum].name}</h2>
-                    <p style="color: #666; margin: 20px 0;">
-                        Hier komt de HTML-code van spel ${gameNum}.<br>
-                        Vervang deze sectie in de <code>loadGameContent</code> functie.
-                    </p>
-                    <p style="background: #fff3cd; padding: 15px; border-radius: 5px; margin-top: 20px;">
-                        💡 Minimale score om door te gaan: <strong>${GAMES_CONFIG[gameNum].minScore}</strong>
-                    </p>
-                </div>
-            `;
+
+                switch (gameNum) {
+                case 1:
+                gameFrame.innerHTML = <div>Hier jouw HTML van spel 1</div> ;
+                break;
+
+                case 2:
+                  gameFrame.innerHTML = `
+                    <div>Hier jouw HTML van spel 2</div>
+                  `;
+          break;
+
+        default:
+                        
+        gameFrame.innerHTML = `<div>Onbekend spel</div>`;
+
+
         }
+    }
 
         function closeGame() {
             document.getElementById('gameModal').classList.remove('active');
