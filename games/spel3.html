@@ -137,6 +137,15 @@
         playSound('sawtooth', 200, 0.4, 0.4);
         setTimeout(() => playSound('sawtooth', 100, 0.5, 0.4), 100);
       };
+      const playWin = () => {
+        if (!audioContext) return;
+        const baseVol = 0.4;
+        const playNote = (freq, delay, duration = 0.15) => setTimeout(() => playSound('triangle', freq, duration, baseVol), delay);
+        playNote(523.25, 0); 
+        playNote(659.25, 100);
+        playNote(783.99, 200);
+        playNote(1046.50, 300, 0.3);
+      };
       const playButtonClick = () => playSound('sine', 1200, 0.08, 0.2);
       
       // --- From components/ArrowIcon.tsx ---
@@ -276,7 +285,7 @@
       // --- From components/HUD.tsx ---
       const HeartIcon = ({className}) => (
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
-              <path d="m11.645 20.91-.007-.003-.022-.012a15.247 15.247 0 0 1-1.344-.682 15.64 15.64 0 0 1-1.292-1.043A3.856 3.856 0 0 1 6.5 12.645V12.5A2.5 2.5 0 0 1 9 10h6a2.5 2.5 0 0 1 2.5 2.5v.145c0 .252.039.5.118.742l.022.068a15.64 15.64 0 0 1-1.292 1.043 15.247 15.247 0 0 1-1.344.682l-.022.012-.007.003-.001.001a.752.752 0 0 1-.704 0l-.001-.001Z" />
+              <path d="m11.645 20.91-.007-.003-.022-.012a15.247 15.247 0 0 1-1.344-.682 15.64 15.64 0 0 1-1.292-1.043A3.856 3.856 0 0 1 6.5 12.645V12.5A2.5 2.5 0 0 1 9 10h6a2.5 2.5 0 0 1 2.5 2.5v.145c0 .252.039.5.118.742l.022.068a15.64 15.64 0 0 1-1.292 1.043 15.247 15.247 0 0 1-1.344-.682l-.022.012-.007.003-.001.001a.752.752 0 0 1-.704 0l-.001-.001Z" />
           </svg>
       );
       const HUD = ({ score, lives, level }) => {
@@ -330,13 +339,27 @@
       };
 
       // --- From components/GameOver.tsx ---
-      const GameOver = ({ score, onRestart, onMenu }) => {
+      const GameOver = ({ score, onRestart, onMenu, result }) => {
         const handleRestart = () => { playButtonClick(); onRestart(); };
         const handleMenu = () => { playButtonClick(); onMenu(); };
+        const isWin = result === 'win';
+        
+        const title = isWin ? 'Gewonnen!' : 'Game Over';
+        let message;
+        if (isWin) {
+          if (score >= 100) {
+            message = 'Gefeliciteerd, je hebt de maximale score behaald!';
+          } else {
+            message = 'Goed gedaan! Je bent geslaagd met een score van 70 of hoger.';
+          }
+        } else {
+          message = 'Helaas, je hebt de minimale score van 70 niet gehaald.';
+        }
+
         return (
           <div className="bg-slate-800/50 p-8 rounded-lg text-center flex flex-col items-center gap-4 border-2 border-slate-700">
-            <h2 className="text-3xl font-bold text-red-500">Game Over</h2>
-            <p className="text-xl text-slate-300">Je eindscore is:</p>
+            <h2 className={`text-3xl font-bold ${isWin ? 'text-green-400' : 'text-red-500'}`}>{title}</h2>
+            <p className="text-xl text-slate-300">{message}</p>
             <p className="text-5xl font-bold text-yellow-300 mb-4">{score}</p>
             <div className="flex gap-4">
               <button
@@ -367,7 +390,7 @@
               <ul className="list-disc list-inside text-left mx-auto max-w-xs">
                 <li><span className="font-bold text-cyan-400">Pijltjes</span>: Beweeg je schieter</li>
                 <li><span className="font-bold text-cyan-400">1, 2, 3 / Klikken</span>: Selecteer een kracht</li>
-                <li><span className="font-bold text-cyan-400">Spatiebalk</span>: Schiet de geselecteerde kracht</li>
+                <li><span className="font-bold text-cyan-400">Spatiebalk / Pijl Omhoog</span>: Schiet de geselecteerde kracht</li>
               </ul>
             </div>
             <button
@@ -440,7 +463,7 @@
 
         const handleKeyDown = useCallback((e) => {
           keysPressed.current[e.key] = true;
-          if (e.code === 'Space') {
+          if (e.code === 'Space' || e.key === 'ArrowUp') {
             e.preventDefault();
             fireProjectile();
           }
@@ -495,7 +518,7 @@
                         explosionsToAdd.push({ id: Date.now() + Math.random(), x: p.x, y: p.y, type: p.type });
                         if (p.type === hitArrow.type) {
                             playHitCorrect();
-                            scoreToAdd += 10;
+                            scoreToAdd += 2;
                         } else {
                             playHitIncorrect();
                             livesToLose += 1;
@@ -518,29 +541,46 @@
                     return true;
                 });
             
-            // 3. Apply all state changes at once
+            const newScore = previousScore + scoreToAdd;
+
+            // 3. Check for max score win condition
+            if (newScore >= 100) {
+              setScore(100);
+              setProjectiles(nextProjectiles);
+              setArrows(nextArrows);
+              onGameOver(100, 'win');
+              return;
+            }
+
+            // 4. Check for end of game (no lives left)
+            if (previousLives > 0 && (previousLives - livesToLose) <= 0) {
+              setScore(newScore);
+              setLives(0);
+              if (newScore >= 70) {
+                onGameOver(newScore, 'win'); // Win by reaching minimum score
+              } else {
+                onGameOver(newScore, 'loss'); // Loss by not reaching minimum score
+              }
+              return;
+            }
+
+            // 5. Apply state changes for a normal frame
             setProjectiles(nextProjectiles);
             setArrows(nextArrows);
             if (explosionsToAdd.length > 0) setExplosions(prev => [...prev, ...explosionsToAdd]);
             if (livesToLose > 0) setLives(l => Math.max(0, l - livesToLose));
-            if (scoreToAdd > 0) setScore(s => s + scoreToAdd);
+            if (scoreToAdd > 0) setScore(newScore);
 
-            // 4. Check for game over
-            if (previousLives > 0 && (previousLives - livesToLose) <= 0) {
-              onGameOver(previousScore + scoreToAdd);
-              return;
-            }
-
-            // 5. Spawn new arrows
+            // 6. Spawn new arrows
             if (Date.now() - lastArrowSpawnTime.current > ARROW_SPAWN_INTERVAL / (1 + (currentLevel - 1) * 0.15)) {
               spawnArrow();
               lastArrowSpawnTime.current = Date.now();
             }
 
-            // 6. Update Level
-            if (previousScore + scoreToAdd > currentLevel * 100) {
+            // 7. Update Level
+            if (newScore > currentLevel * 20) {
               playLevelUp();
-              setLevel(l => l + 1);
+              setLevel(Math.floor(newScore / 20) + 1);
               setLives(l => Math.min(MAX_LIVES, l + 1));
             }
             
@@ -573,17 +613,24 @@
       const App = () => {
         const [gameState, setGameState] = useState('MainMenu');
         const [score, setScore] = useState(0);
+        const [gameResult, setGameResult] = useState(null); // 'win' or 'loss'
 
         const startGame = useCallback(async () => {
           await initAudio();
           playButtonClick();
           setScore(0);
+          setGameResult(null);
           setGameState('Playing');
         }, []);
 
-        const endGame = useCallback((finalScore) => {
-          playGameOver();
+        const endGame = useCallback((finalScore, result) => {
+          if (result === 'win') {
+            playWin();
+          } else {
+            playGameOver();
+          }
           setScore(finalScore);
+          setGameResult(result);
           setGameState('GameOver');
         }, []);
 
@@ -596,7 +643,7 @@
             case 'Playing':
               return <Game onGameOver={endGame} />;
             case 'GameOver':
-              return <GameOver score={score} onRestart={startGame} onMenu={returnToMenu} />;
+              return <GameOver score={score} onRestart={startGame} onMenu={returnToMenu} result={gameResult} />;
             case 'MainMenu':
             default:
               return <MainMenu onStartGame={startGame} />;
@@ -610,13 +657,12 @@
                 <h1 className="text-4xl md:text-5xl font-bold text-cyan-400 tracking-wider">
                   Natuurkunde Krachtenspel
                 </h1>
-                <p className="text-slate-400 mt-2">Leer krachten herkennen op een hellend vlak!</p>
               </header>
               <main>
                 {renderGameState()}
               </main>
               <footer className="text-center mt-6 text-sm text-slate-500">
-                <p>Gemaakt voor MBO-studenten. Gebruik de pijltjestoetsen om te bewegen, selecteer een kracht en druk op de spatiebalk om te schieten.</p>
+                <p>Gebruik de pijltjestoetsen om te bewegen, selecteer een kracht en druk op de spatiebalk of pijl omhoog om te schieten.</p>
               </footer>
             </div>
           </div>
