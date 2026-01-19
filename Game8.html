@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Natuurkunde Helling Simulatie</title>
+    
+    <!-- Stijlen en Iconen -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <!-- React & ReactDOM (UMD voor standalone gebruik) -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel voor JSX transformatie in de browser -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        .text-shadow {
+            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.2);
+        }
+        .text-shadow-md {
+            text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.3);
+        }
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-1px, 0, 0); }
+            20%, 80% { transform: translate3d(2px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+            40%, 60% { transform: translate3d(4px, 0, 0); }
+        }
+        .shake {
+            animation: shake 0.82s cubic-bezier(.36,.07,.19,.97) both;
+        }
+        @keyframes fade-in {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+            animation: fade-in 0.5s ease-out forwards;
+        }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/"
+  }
+}
+</script>
+</head>
+<body class="bg-slate-800">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useCallback } = React;
+
+        // --- CONSTANTS ---
+        const GRAVITY = 9.81;
+
+        // --- COMPONENTS ---
+
+        // 1. Instructions
+        const Instructions = () => (
+            <div className="w-full p-6 rounded-xl bg-white/20 backdrop-blur-sm shadow-lg">
+                <h3 className="text-xl font-bold text-white text-shadow mb-3">Jouw Opdracht</h3>
+                <p className="text-white/90 text-shadow mb-4">
+                    Pas de hellingshoek (θ) en de wrijvingscoëfficiënt (μ) aan om de gevraagde doelversnelling te evenaren.
+                </p>
+                <div className="bg-black/20 p-3 rounded-md text-center">
+                    <p className="font-mono text-white text-lg text-shadow">a = g(sin θ – μ cos θ)</p>
+                </div>
+                <p className="text-xs text-sky-100 mt-3 text-shadow">* Hierbij is g ≈ 9.81 m/s²</p>
+            </div>
+        );
+
+        // 2. SliderInput (Helper for ControlPanel)
+        const SliderInput = ({ label, value, min, max, step, onChange, unit, disabled }) => (
+            <div>
+                <label className="block text-sm font-bold text-white text-shadow mb-1">
+                    {label}: <span className="font-semibold">{value.toFixed(2)}{unit}</span>
+                </label>
+                <input
+                    type="range"
+                    min={min}
+                    max={max}
+                    step={step}
+                    value={value}
+                    onChange={onChange}
+                    disabled={disabled}
+                    className="w-full h-3 bg-white/30 rounded-lg appearance-none cursor-pointer accent-sky-200 disabled:cursor-not-allowed disabled:accent-slate-400"
+                />
+            </div>
+        );
+
+        // 3. ControlPanel
+        const ControlPanel = ({
+            angle,
+            setAngle,
+            frictionCoefficient,
+            setFrictionCoefficient,
+            onSubmitAnswer,
+            isShaking,
+            isDisabled,
+        }) => {
+            return (
+                <div className={`w-full p-6 rounded-xl bg-white/20 backdrop-blur-sm shadow-lg space-y-6 ${isShaking ? 'shake' : ''}`}>
+                    <h3 className="text-xl font-bold text-white text-shadow border-b border-white/30 pb-2">Instellingen</h3>
+                    <SliderInput
+                        label="Hellingshoek (θ)"
+                        value={angle}
+                        min={0}
+                        max={60}
+                        step={0.5}
+                        onChange={(e) => setAngle(parseFloat(e.target.value))}
+                        unit="°"
+                        disabled={isDisabled}
+                    />
+                    <SliderInput
+                        label="Wrijvingscoëfficiënt (μ)"
+                        value={frictionCoefficient}
+                        min={0}
+                        max={1.2}
+                        step={0.01}
+                        onChange={(e) => setFrictionCoefficient(parseFloat(e.target.value))}
+                        unit=""
+                        disabled={isDisabled}
+                    />
+                    <div className="pt-4 border-t border-white/30">
+                        <button
+                            onClick={onSubmitAnswer}
+                            disabled={isDisabled}
+                            className="w-full bg-white text-sky-600 font-bold py-3 px-8 rounded-lg shadow-lg hover:bg-sky-100 transition-transform transform hover:scale-105 disabled:bg-slate-400/50 disabled:text-white disabled:cursor-not-allowed disabled:scale-100"
+                        >
+                            Check Antwoord
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+        // 4. ResultsDisplay
+        const ResultsDisplay = ({ acceleration }) => {
+            const statusText = acceleration > 0 ? "De kar versnelt!" : "De kar blijft staan.";
+            const statusColor = acceleration > 0 ? "text-green-300" : "text-red-300";
+            
+            return (
+                <div className="w-full p-6 rounded-xl bg-white/20 backdrop-blur-sm shadow-lg text-center">
+                    <h3 className="text-lg font-bold text-white text-shadow mb-2">Huidige Versnelling (a)</h3>
+                    <p className="text-5xl font-bold text-white text-shadow-md mb-2">
+                        {acceleration.toFixed(2)} <span className="text-3xl opacity-80">m/s²</span>
+                    </p>
+                    <p className={`text-md font-medium h-6 text-shadow ${statusColor}`}>
+                        {statusText}
+                    </p>
+                </div>
+            );
+        };
+
+        // 5. Cart (Helper for InclinedPlane)
+        const Cart = () => (
+            <div className="relative w-12 h-8" aria-label="Karretje">
+                <div className="absolute -bottom-1 left-2 w-5 h-5 bg-slate-700 rounded-full border-2 border-slate-300 shadow-sm"></div>
+                <div className="absolute -bottom-1 right-2 w-5 h-5 bg-slate-700 rounded-full border-2 border-slate-300 shadow-sm"></div>
+                <div className="absolute bottom-[6px] left-0 w-12 h-6 bg-red-600 rounded-sm border-b-4 border-red-800 shadow-lg"></div>
+            </div>
+        );
+
+        // 6. InclinedPlane
+        const InclinedPlane = ({ angle, isAnimating, onAnimationEnd }) => {
+            const [position, setPosition] = useState(0);
+            const planeLength = 500;
+            const cartWidth = 48; // Corresponds to w-12
+
+            useEffect(() => {
+                if (isAnimating) {
+                    setPosition(planeLength - cartWidth);
+                    const timer = setTimeout(() => {
+                        onAnimationEnd();
+                        // Reset position after a delay, allowing for a new round
+                        setTimeout(() => setPosition(0), 500);
+                    }, 1500); // Animation duration
+                    return () => clearTimeout(timer);
+                } else {
+                    setPosition(0);
+                }
+            }, [isAnimating, onAnimationEnd, planeLength, cartWidth]);
+
+            const angleRad = (angle * Math.PI) / 180;
+            const baseWidth = planeLength * Math.cos(angleRad);
+            const planeHeight = planeLength * Math.sin(angleRad);
+
+            return (
+                <div className="relative w-full h-[400px] flex items-center justify-center">
+                    <div className="relative" style={{ width: `${planeLength}px`, height: '300px' }}>
+                        <div 
+                            className="absolute bottom-10 left-0"
+                            style={{ 
+                                transformOrigin: 'bottom left',
+                                transform: `rotate(${-angle}deg)`
+                            }}
+                        >
+                            <div 
+                                className="relative h-2 bg-slate-600 shadow-md rounded-full"
+                                style={{ width: `${planeLength}px` }}
+                            >
+                                <div 
+                                    className="absolute"
+                                    style={{
+                                        bottom: '8px',
+                                        transform: `translateX(${position}px)`,
+                                        transition: isAnimating ? 'transform 1.5s ease-in-out' : 'none',
+                                    }}
+                                >
+                                    <Cart />
+                                </div>
+                            </div>
+                        </div>
+
+                        {angle > 1 && (
+                            <>
+                                <div 
+                                    className="absolute bottom-10 left-0 h-1 bg-green-700/80 rounded-full" 
+                                    style={{ width: `${baseWidth}px` }}
+                                />
+                                <div 
+                                    className="absolute bg-green-700/80 rounded-full" 
+                                    style={{ 
+                                        left: `${baseWidth}px`,
+                                        bottom: '40px',
+                                        height: `${planeHeight}px`,
+                                        width: '4px',
+                                    }}
+                                />
+                                <div className="absolute bottom-2 left-8 text-white font-semibold text-lg text-shadow">
+                                    {angle.toFixed(0)}°
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        // 7. LivesIndicator (Helper for GameStatus)
+        const LivesIndicator = ({ count }) => (
+            <div className="flex items-center space-x-2">
+                <span className="text-xl font-bold text-white text-shadow">Levens:</span>
+                <div className="flex space-x-1">
+                    {[...Array(3)].map((_, i) => (
+                        <i key={i} className={`fa-solid fa-heart text-2xl transition-all duration-300 ${i < count ? 'text-red-500' : 'text-slate-300/50'}`} />
+                    ))}
+                </div>
+            </div>
+        );
+
+        // 8. GameStatus
+        const GameStatus = ({ targetAcceleration, lives, feedback }) => {
+            let feedbackColor = 'text-sky-100';
+            if (feedback && feedback.includes('Perfect')) {
+                feedbackColor = 'text-green-300';
+            } else if (feedback) {
+                feedbackColor = 'text-red-300';
+            }
+
+            return (
+                <div className="w-full max-w-4xl flex flex-col md:flex-row justify-between items-center bg-white/70 backdrop-blur-sm p-4 rounded-2xl shadow-md z-10 mx-auto">
+                    <div className="text-center md:text-left mb-2 md:mb-0">
+                        <h3 className="text-md font-bold text-slate-700">Doelversnelling</h3>
+                        <p className="text-3xl font-bold text-sky-700">
+                            {targetAcceleration.toFixed(2)} <span className="text-xl text-slate-600">m/s²</span>
+                        </p>
+                    </div>
+                    <div className={`text-center my-2 md:my-0 transition-all duration-300 ${feedback ? 'animate-fade-in' : 'opacity-0'}`}>
+                        <p className={`text-xl font-bold text-shadow ${feedbackColor}`}>
+                            {feedback}
+                        </p>
+                    </div>
+                    <div className="text-center md:text-right">
+                        <LivesIndicator count={lives} />
+                    </div>
+                </div>
+            );
+        };
+
+        // 9. GameOverlay
+        const GameOverlay = ({ gameState, onStartGame }) => {
+            const isGameOver = gameState === 'game_over';
+
+            const title = isGameOver ? 'Stunt Mislukt!' : 'Helling Challenge!';
+            const description = isGameOver
+                ? 'Helaas, je berekeningen waren niet nauwkeurig genoeg. Terug naar de tekentafel!'
+                : 'Jouw missie is om de hellingshoek en wrijving zo aan te passen dat je de doelversnelling bereikt. Je hebt 3 levens. Zet hem op!';
+            const buttonText = isGameOver ? 'Probeer Opnieuw' : 'Start Challenge';
+
+            return (
+                <div className="absolute inset-0 bg-sky-800/50 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-fade-in">
+                    <div className="text-center">
+                        <h1 className="text-5xl font-bold text-white mb-4 text-shadow-md">{title}</h1>
+                        <p className="text-lg text-sky-100 mb-8 max-w-2xl text-shadow">{description}</p>
+                        <button
+                            onClick={onStartGame}
+                            className="bg-white text-sky-600 font-bold py-3 px-8 rounded-lg shadow-lg hover:bg-sky-100 transition-transform transform hover:scale-105"
+                        >
+                            {buttonText}
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- MAIN APP COMPONENT ---
+        const App = () => {
+            // Simulation State
+            const [angle, setAngle] = useState(30);
+            const [frictionCoefficient, setFrictionCoefficient] = useState(0.2);
+            const [acceleration, setAcceleration] = useState(0);
+            const [isAnimating, setIsAnimating] = useState(false);
+            
+            // Game State
+            const [gameState, setGameState] = useState('idle');
+            const [lives, setLives] = useState(3);
+            const [targetAcceleration, setTargetAcceleration] = useState(0);
+            const [feedback, setFeedback] = useState('');
+            const [isShaking, setIsShaking] = useState(false);
+
+            // Calculate acceleration
+            useEffect(() => {
+                const angleRad = (angle * Math.PI) / 180;
+                const sinTheta = Math.sin(angleRad);
+                const cosTheta = Math.cos(angleRad);
+
+                let calculatedAcceleration = 0;
+                if (sinTheta > frictionCoefficient * cosTheta) {
+                    calculatedAcceleration = GRAVITY * (sinTheta - frictionCoefficient * cosTheta);
+                }
+                setAcceleration(calculatedAcceleration);
+            }, [angle, frictionCoefficient]);
+            
+            const generateNewTarget = useCallback(() => {
+                let newTarget = 0;
+                while (newTarget <= 0.2) {
+                    const randomAngle = 20 + Math.random() * 30; // 20-50 deg
+                    const randomFriction = 0.1 + Math.random() * 0.6; // 0.1-0.7
+                    const angleRad = (randomAngle * Math.PI) / 180;
+                    const sinTheta = Math.sin(angleRad);
+                    const cosTheta = Math.cos(angleRad);
+                    
+                    if (sinTheta > randomFriction * cosTheta) {
+                        newTarget = GRAVITY * (sinTheta - randomFriction * cosTheta);
+                    }
+                }
+                setTargetAcceleration(newTarget);
+            }, []);
+
+            const handleStartGame = () => {
+                setLives(3);
+                generateNewTarget();
+                setGameState('playing');
+                setFeedback('');
+                setAngle(15);
+                setFrictionCoefficient(0.1);
+                setIsAnimating(false);
+            };
+
+            const handleSubmitAnswer = () => {
+                if (isAnimating || gameState !== 'playing' || feedback) return;
+
+                const difference = Math.abs(acceleration - targetAcceleration);
+                const tolerance = 0.15;
+
+                if (difference <= tolerance) {
+                    setFeedback('Perfect! De kar rijdt!');
+                    setGameState('won_round');
+                    setIsAnimating(true);
+                } else {
+                    const newLives = lives - 1;
+                    setLives(newLives);
+                    setIsShaking(true);
+                    
+                    if (acceleration > targetAcceleration) {
+                        setFeedback('Bijna! Je versnelling is te hoog.');
+                    } else {
+                        setFeedback('Oeps! Je versnelling is te laag.');
+                    }
+
+                    if (newLives <= 0) {
+                        setTimeout(() => setGameState('game_over'), 1500);
+                    } else {
+                        setTimeout(() => {
+                            setFeedback('');
+                            setIsShaking(false);
+                        }, 1500);
+                    }
+                }
+            };
+            
+            useEffect(() => {
+                if (gameState === 'won_round' && !isAnimating) {
+                    setTimeout(() => {
+                        generateNewTarget();
+                        setGameState('playing');
+                        setFeedback('');
+                    }, 1000);
+                }
+            }, [gameState, isAnimating, generateNewTarget]);
+
+            const isGameActive = gameState === 'playing' || gameState === 'won_round' || gameState === 'game_over';
+
+            return (
+                <div className="min-h-screen flex flex-col items-center justify-center p-4 font-sans text-slate-800">
+                    <main className="w-full max-w-6xl bg-gradient-to-b from-sky-400 to-sky-600 rounded-2xl shadow-xl p-6 md:p-10 flex flex-col items-center justify-center min-h-[700px] relative overflow-hidden">
+                        <div className="absolute top-8 right-12 w-20 h-20 bg-yellow-300 rounded-full shadow-lg animate-pulse" />
+
+                        {(gameState === 'idle' || gameState === 'game_over') && (
+                            <GameOverlay gameState={gameState} onStartGame={handleStartGame} />
+                        )}
+
+                        {isGameActive && (
+                            <div className="w-full animate-fade-in">
+                                <GameStatus 
+                                    targetAcceleration={targetAcceleration}
+                                    lives={lives}
+                                    feedback={feedback}
+                                />
+                                <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                    <div className="lg:col-span-1 flex flex-col gap-6">
+                                        <Instructions />
+                                        <ControlPanel
+                                            angle={angle}
+                                            setAngle={setAngle}
+                                            frictionCoefficient={frictionCoefficient}
+                                            setFrictionCoefficient={setFrictionCoefficient}
+                                            onSubmitAnswer={handleSubmitAnswer}
+                                            isShaking={isShaking}
+                                            isDisabled={!!feedback || isAnimating || gameState !== 'playing'}
+                                        />
+                                    </div>
+                                    <div className="lg:col-span-2 flex flex-col gap-6">
+                                        <ResultsDisplay acceleration={acceleration} />
+                                        <InclinedPlane
+                                            angle={angle}
+                                            isAnimating={isAnimating}
+                                            onAnimationEnd={() => setIsAnimating(false)}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </main>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
