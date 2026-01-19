@@ -781,38 +781,22 @@
         }
 
         function loadGameContent(gameNum) {
-            const gameFrame = document.getElementById('gameFrame');
+    const gameFrame = document.getElementById('gameFrame');
     
-            // Toon een laad-indicator
-            gameFrame.innerHTML = `
-                <div style="text-align: center; padding: 50px;">
-                    <p>Spel wordt geladen...</p>
-                </div>
-            `;
-    
-            // Laad het spel van de games map
-            fetch(`games/spel${gameNum}.html`)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Spel niet gevonden');
-                    }
-                    return response.text();
-                })
-                .then(html => {
-                    gameFrame.innerHTML = html;
-                })
-                .catch(error => {
-                    gameFrame.innerHTML = `
-                        <div style="text-align: center; padding: 50px;">
-                            <h3>❌ Spel ${gameNum} kon niet worden geladen</h3>
-                            <p style="color: #999;">Zorg dat het bestand "games/spel${gameNum}.html" bestaat in je repository.</p>
-                            <p style="background: #fff3cd; padding: 15px; border-radius: 5px; margin-top: 20px;">
-                                💡 Minimale score om door te gaan: <strong>${GAMES_CONFIG[gameNum].minScore}</strong>
-                            </p>
-                        </div>
-                    `;
-                });
-        }
+    // De URL van het spel
+    const gameUrl = `games/spel${gameNum}.html`;
+
+    // Gebruik een iframe in plaats van innerHTML fetch
+    gameFrame.innerHTML = `
+        <iframe 
+            src="${gameUrl}" 
+            style="width: 100%; height: 600px; border: none;" 
+            title="Game ${gameNum}"
+            onload="console.log('Spel geladen')"
+            onerror="console.error('Fout bij laden')">
+        </iframe>
+    `;
+}
 
         function closeGame() {
             document.getElementById('gameModal').classList.remove('active');
