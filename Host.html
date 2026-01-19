@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leer Skill-Tree</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+
+        .login-screen, .teacher-dashboard {
+            max-width: 500px;
+            margin: 0 auto;
+            padding: 40px;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 600;
+        }
+
+        .input-group input, .input-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        .input-group input:focus, .input-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 8px;
+            font-size: 18px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 10px;
+            transition: transform 0.2s, box-shadow 0.2s;
+            font-weight: 600;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            margin-top: 10px;
+        }
+
+        .btn-small {
+            padding: 8px 20px;
+            font-size: 14px;
+            width: auto;
+        }
+
+        .skill-tree-container {
+            position: relative;
+            padding: 40px 20px;
+            min-height: 600px;
+        }
+
+        .user-info {
+            background: #f8f9fa;
+            padding: 15px 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .user-info h3 {
+            color: #333;
+            margin: 0;
+        }
+
+        .tree-canvas {
+            position: relative;
+            margin: 0 auto;
+            max-width: 1200px;
+        }
+
+        svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .tree-row {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 60px 0;
+            gap: 100px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .game-node {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: 4px solid #ddd;
+            background: #f0f0f0;
+            position: relative;
+        }
+
+        .game-node.unlocked {
+            background: linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%);
+            border-color: #4CAF50;
+            box-shadow: 0 5px 15px rgba(76, 175, 80, 0.4);
+        }
+
+        .game-node.completed {
+            background: linear-gradient(135deg, #ffd89b 0%, #19547b 100%);
+            border-color: #FF9800;
+            box-shadow: 0 5px 15px rgba(255, 152, 0, 0.4);
+        }
+
+        .game-node.locked {
+            background: #e0e0e0;
+            border-color: #999;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        .game-node:hover:not(.locked) {
+            transform: scale(1.1);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+        }
+
+        .game-node .game-number {
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .game-node .game-name {
+            font-size: 12px;
+            color: #555;
+            margin-top: 5px;
+            text-align: center;
+        }
+
+        .game-node .score-badge {
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            background: #FF9800;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        .game-node .lock-icon {
+            font-size: 40px;
+            color: #999;
+        }
+
+        .game-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            z-index: 1000;
+            overflow-y: auto;
+        }
+
+        .game-modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .game-content {
+            background: white;
+            border-radius: 15px;
+            max-width: 900px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            position: relative;
+            padding: 30px;
+        }
+
+        .game-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #eee;
+        }
+
+        .close-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .close-btn:hover {
+            background: #c82333;
+        }
+
+        .game-frame {
+            width: 100%;
+            min-height: 500px;
+            border: 2px solid #eee;
+            border-radius: 10px;
+            padding: 20px;
+            background: #f9f9f9;
+        }
+
+        .score-input {
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+
+        .score-input input {
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            margin-right: 10px;
+            width: 150px;
+        }
+
+        .dashboard-nav {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .tab-btn {
+            padding: 10px 20px;
+            background: #e9ecef;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .tab-btn.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .students-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        .students-table th,
+        .students-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .students-table th {
+            background: #667eea;
+            color: white;
+            font-weight: 600;
+        }
+
+        .students-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .settings-form {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+
+        .settings-form .input-group {
+            margin-bottom: 15px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .progress-bar {
+            background: #e9ecef;
+            border-radius: 10px;
+            height: 20px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .progress-fill {
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            height: 100%;
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎮 Leer Skill-Tree Platform</h1>
+
+        <div id="loginScreen" class="login-screen">
+            <div class="input-group">
+                <label>Wie ben je?</label>
+                <select id="userType">
+                    <option value="student">Leerling</option>
+                    <option value="teacher">Docent</option>
+                </select>
+            </div>
+
+            <div id="studentLogin">
+                <div class="input-group">
+                    <label>Jouw naam:</label>
+                    <input type="text" id="studentName" placeholder="Voer je naam in">
+                </div>
+                <div class="input-group">
+                    <label>Klas:</label>
+                    <input type="text" id="studentClass" placeholder="Bijv. 3A">
+                </div>
+                <button class="btn" id="studentLoginBtn">Start met Leren</button>
+            </div>
+
+            <div id="teacherLogin" class="hidden">
+                <div class="input-group">
+                    <label>Docent Wachtwoord:</label>
+                    <input type="password" id="teacherPassword" placeholder="Wachtwoord">
+                </div>
+                <button class="btn" id="teacherLoginBtn">Inloggen als Docent</button>
+            </div>
+        </div>
+
+        <div id="skillTreeView" class="hidden">
+            <div class="user-info">
+                <div>
+                    <h3>👤 <span id="currentStudentName"></span></h3>
+                    <p>Klas: <span id="currentStudentClass"></span></p>
+                </div>
+                <div>
+                    <button class="btn btn-small btn-secondary" id="logoutBtn">Uitloggen</button>
+                </div>
+            </div>
+
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressBar" style="width: 0%">0%</div>
+            </div>
+
+            <div class="skill-tree-container">
+                <div class="tree-canvas">
+                    <svg id="connectionsSvg" width="100%" height="600"></svg>
+                    
+                    <div class="tree-row" style="margin-top: 20px;">
+                        <div class="game-node" id="node1" data-game="1">
+                            <div class="game-number">1</div>
+                            <div class="game-name">Spel 1</div>
+                        </div>
+                    </div>
+
+                    <div class="tree-row">
+                        <div class="game-node locked" id="node2" data-game="2">
+                            <div class="lock-icon">🔒</div>
+                            <div class="game-name">Spel 2</div>
+                        </div>
+                    </div>
+
+                    <div class="tree-row">
+                        <div class="game-node locked" id="node3" data-game="3">
+                            <div class="lock-icon">🔒</div>
+                            <div class="game-name">Spel 3</div>
+                        </div>
+                        <div class="game-node locked" id="node6" data-game="6">
+                            <div class="lock-icon">🔒</div>
+                            <div class="game-name">Spel 6</div>
+                        </div>
+                    </div>
+
+                    <div class="tree-row">
+                        <div class="game-node locked" id="node4" data-game="4">
+                            <div class="lock-icon">🔒</div>
+                            <div class="game-name">Spel 4</div>
+                        </div>
+                        <div class="game-node locked" id="node7" data-game="7">
+                            <div class="lock-icon">🔒</div>
+                            <div class="game-name">Spel 7</div>
+                        </div>
+                    </div>
+
+                    <div class="tree-row">
+                        <div class="game-node locked" id="node5" data-game="5">
+                            <div class="lock-icon">🔒</div>
+                            <div class="game-name">Spel 5</div>
+                        </div>
+                        <div class="game-node locked" id="node8" data-game="8">
+                            <div class="lock-icon">🔒</div>
+                            <div class="game-name">Spel 8</div>
+                        </div>
+                    </div>
+
+                    <div class="tree-row">
+                        <div class="game-node locked" id="node9" data-game="9">
+                            <div class="lock-icon">🔒</div>
+                            <div class="game-name">Spel 9 (Finale!)</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="teacherDashboard" class="hidden teacher-dashboard">
+            <div class="user-info">
+                <h3>👨‍🏫 Docenten Dashboard</h3>
+                <button class="btn btn-small btn-secondary" id="teacherLogoutBtn">Uitloggen</button>
+            </div>
+
+            <div class="dashboard-nav">
+                <button class="tab-btn active" id="studentsTabBtn">Leerlingen</button>
+                <button class="tab-btn" id="settingsTabBtn">Instellingen</button>
+            </div>
+
+            <div id="studentsTab">
+                <div class="input-group">
+                    <label>Filter op klas:</label>
+                    <select id="classFilter">
+                        <option value="">Alle klassen</option>
+                    </select>
+                </div>
+
+                <table class="students-table">
+                    <thead>
+                        <tr>
+                            <th>Naam</th>
+                            <th>Klas</th>
+                            <th>Voortgang</th>
+                            <th>Laatst Actief</th>
+                        </tr>
+                    </thead>
+                    <tbody id="studentsTableBody">
+                    </tbody>
+                </table>
+            </div>
+
+            <div id="settingsTab" class="hidden">
+                <div class="settings-form">
+                    <h3>Minimum Scores per Spel</h3>
+                    <p style="margin-bottom: 20px; color: #666;">Stel hier de minimale score in die een leerling moet halen om het volgende spel te unlocken.</p>
+                    
+                    <div id="scoreSettingsContainer"></div>
+                    
+                    <button class="btn" id="saveSettingsBtn">Instellingen Opslaan</button>
+                </div>
+
+                <div class="settings-form" style="margin-top: 20px;">
+                    <h3>Docent Wachtwoord Wijzigen</h3>
+                    <div class="input-group">
+                        <label>Nieuw Wachtwoord:</label>
+                        <input type="password" id="newPassword" placeholder="Nieuw wachtwoord">
+                    </div>
+                    <button class="btn" id="changePasswordBtn">Wachtwoord Wijzigen</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="gameModal" class="game-modal">
+            <div class="game-content">
+                <div class="game-header">
+                    <h2 id="gameTitle">Spel 1</h2>
+                    <button class="close-btn" id="closeGameBtn">Sluiten</button>
+                </div>
+
+                <div class="game-frame" id="gameFrame">
+                    <p style="text-align: center; color: #999; padding: 50px;">
+                        Hier komt de HTML-code van het spelletje.<br>
+                        Vervang deze tekst met je eigen game HTML.
+                    </p>
+                </div>
+
+                <div class="score-input">
+                    <h3>Score Invoeren</h3>
+                    <p style="margin-bottom: 10px; color: #666;">Heb je het spel afgerond? Voer je score in:</p>
+                    <input type="number" id="scoreInput" placeholder="Score" min="0">
+                    <button class="btn btn-small" id="submitScoreBtn">Score Opslaan</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const GAMES_CONFIG = {
+            1: { name: 'Spel 1', unlocks: [2], minScore: 50 },
+            2: { name: 'Spel 2', unlocks: [3, 6], minScore: 60 },
+            3: { name: 'Spel 3', unlocks: [4], minScore: 70 },
+            4: { name: 'Spel 4', unlocks: [5], minScore: 65 },
+            5: { name: 'Spel 5', unlocks: [], minScore: 80 },
+            6: { name: 'Spel 6', unlocks: [7], minScore: 55 },
+            7: { name: 'Spel 7', unlocks: [8], minScore: 75 },
+            8: { name: 'Spel 8', unlocks: [], minScore: 70 },
+            9: { name: 'Spel 9 - Finale', unlocks: [], minScore: 90 }
+        };
+
+        const CONNECTIONS = [
+            { from: 1, to: 2 },
+            { from: 2, to: 3 },
+            { from: 2, to: 6 },
+            { from: 3, to: 4 },
+            { from: 4, to: 5 },
+            { from: 6, to: 7 },
+            { from: 7, to: 8 },
+            { from: 5, to: 9 },
+            { from: 8, to: 9 }
+        ];
+
+        let currentUser = null;
+        let currentGame = null;
+        let teacherPassword = 'admin123';
+        const storageData = {};
+
+        function saveToStorage(key, value) {
+            storageData[key] = value;
+            localStorage.setItem(key, JSON.stringify(value));
+        }
+
+        function getFromStorage(key) {
+            if (storageData[key]) return storageData[key];
+            const data = localStorage.getItem(key);
+            if (data) {
+                storageData[key] = JSON.parse(data);
+                return storageData[key];
+            }
+            return null;
+        }
+
+        function init() {
+            const savedPassword = getFromStorage('teacherPassword');
+            if (savedPassword) teacherPassword = savedPassword;
+
+            const savedConfig = getFromStorage('gamesConfig');
+            if (savedConfig) Object.assign(GAMES_CONFIG, savedConfig);
+
+            document.getElementById('userType').addEventListener('change', toggleUserType);
+            document.getElementById('studentLoginBtn').addEventListener('click', startAsStudent);
+            document.getElementById('teacherLoginBtn').addEventListener('click', loginAsTeacher);
+            document.getElementById('logoutBtn').addEventListener('click', logout);
+            document.getElementById('teacherLogoutBtn').addEventListener('click', logout);
+            document.getElementById('closeGameBtn').addEventListener('click', closeGame);
+            document.getElementById('submitScoreBtn').addEventListener('click', submitScore);
+            document.getElementById('studentsTabBtn').addEventListener('click', () => showTab('students'));
+            document.getElementById('settingsTabBtn').addEventListener('click', () => showTab('settings'));
+            document.getElementById('classFilter').addEventListener('change', filterStudents);
+            document.getElementById('saveSettingsBtn').addEventListener('click', saveSettings);
+            document.getElementById('changePasswordBtn').addEventListener('click', changePassword);
+
+            for (let i = 1; i <= 9; i++) {
+                document.getElementById('node' + i).addEventListener('click', function() {
+                    openGame(parseInt(this.getAttribute('data-game')));
+                });
+            }
+        }
+
+        function toggleUserType() {
+            const userType = document.getElementById('userType').value;
+            if (userType === 'student') {
+                document.getElementById('studentLogin').classList.remove('hidden');
+                document.getElementById('teacherLogin').classList.add('hidden');
+            } else {
+                document.getElementById('studentLogin').classList.add('hidden');
+                document.getElementById('teacherLogin').classList.remove('hidden');
+            }
+        }
+
+        function startAsStudent() {
+            const name = document.getElementById('studentName').value.trim();
+            const className = document.getElementById('studentClass').value.trim();
+
+            if (!name || !className) {
+                alert('Vul alsjeblieft je naam en klas in!');
+                return;
+            }
+
+            currentUser = {
+                type: 'student',
+                name: name,
+                class: className,
+                id: name.toLowerCase().replace(/\s+/g, '_') + '_' + className.toLowerCase()
+            };
+
+            let studentData = getFromStorage('student_' + currentUser.id);
+            if (!studentData) {
+                studentData = {
+                    name: name,
+                    class: className,
+                    progress: { 1: { unlocked: true } },
+                    scores: {},
+                    lastActive: new Date().toISOString()
+                };
+                saveToStorage('student_' + currentUser.id, studentData);
+
+                let allStudents = getFromStorage('allStudents') || [];
+                if (!allStudents.find(s => s.id === currentUser.id)) {
+                    allStudents.push({ id: currentUser.id, name: name, class: className });
+                    saveToStorage('allStudents', allStudents);
+                }
+            }
+
+            showSkillTree();
+        }
+
+        function loginAsTeacher() {
+            const password = document.getElementById('teacherPassword').value;
+            if (password === teacherPassword) {
+                currentUser = { type: 'teacher' };
+                showTeacherDashboard();
+            } else {
+                alert('Incorrect wachtwoord!');
+            }
+        }
+
+        function showSkillTree() {
+            document.getElementById('loginScreen').classList.add('hidden');
+            document.getElementById('skillTreeView').classList.remove('hidden');
+            document.getElementById('currentStudentName').textContent = currentUser.name;
+            document.getElementById('currentStudentClass').textContent = currentUser.class;
+            updateSkillTree();
+            setTimeout(drawConnections, 100);
+        }
+
+        function updateSkillTree() {
+            const studentData = getFromStorage('student_' + currentUser.id);
+            const progress = studentData.progress || { 1: { unlocked: true } };
+            const scores = studentData.scores || {};
+            let completedGames = 0;
+
+            for (let i = 1; i <= 9; i++) {
+                const node = document.getElementById('node' + i);
+                const gameProgress = progress[i];
+
+                if (gameProgress && gameProgress.unlocked) {
+                    node.classList.remove('locked');
+                    node.classList.add('unlocked');
+                    node.innerHTML = `<div class="game-number">${i}</div><div class="game-name">${GAMES_CONFIG[i].name}</div>`;
+
+                    if (scores[i] !== undefined) {
+                        node.classList.add('completed');
+                        node.innerHTML += `<div class="score-badge">${scores[i]}</div>`;
+                        completedGames++;
+                    }
+                } else {
+                    node.classList.add('locked');
+                    node.classList.remove('unlocked', 'completed');
+                    node.innerHTML = `<div class="lock-icon">🔒</div><div class="game-name">${GAMES_CONFIG[i].name}</div>`;
+                }
+            }
+
+            const progressPercent = Math.round((completedGames / 9) * 100);
+            document.getElementById('progressBar').style.width = progressPercent + '%';
+            document.getElementById('progressBar').textContent = progressPercent + '%';
+        }
+
+        function drawConnections() {
+            const svg = document.getElementById('connectionsSvg');
+            svg.innerHTML = '';
+
+            CONNECTIONS.forEach(conn => {
+                const fromNode = document.getElementById('node' + conn.from);
+                const toNode = document.getElementById('node' + conn.to);
+                if (!fromNode || !toNode) return;
+
+                const fromRect = fromNode.getBoundingClientRect();
+                const toRect = toNode.getBoundingClientRect();
+                const containerRect = svg.getBoundingClientRect();
+
+                const x1 = fromRect.left + fromRect.width / 2 - containerRect.left;
+                const y1 = fromRect.top + fromRect.height / 2 - containerRect.top;
+                const x2 = toRect.left + toRect.width / 2 - containerRect.left;
+                const y2 = toRect.top + toRect.height / 2 - containerRect.top;
+
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('x1', x1);
+                line.setAttribute('y1', y1);
+                line.setAttribute('x2', x2);
+                line.setAttribute('y2', y2);
+                line.setAttribute('stroke', '#ccc');
+                line.setAttribute('stroke-width', '3');
+                line.setAttribute('stroke-dasharray', '5,5');
+
+                const studentData = getFromStorage('student_' + currentUser.id);
+                if (studentData && studentData.progress[conn.from]) {
+                    line.setAttribute('stroke', '#4CAF50');
+                    line.setAttribute('stroke-width', '4');
+                }
+
+                svg.appendChild(line);
+            });
+        }
+
+        function openGame(gameNum) {
+            if (currentUser.type !== 'student') return;
+
+            const studentData = getFromStorage('student_' + currentUser.id);
+            const progress = studentData.progress || {};
+
+            if (!progress[gameNum] || !progress[gameNum].unlocked) {
+                alert('Dit spel is nog niet unlocked! Haal eerst de vorige spellen.');
+                return;
+            }
+
+            currentGame = gameNum;
+            document.getElementById('gameTitle').textContent = GAMES_CONFIG[gameNum].name;
+            document.getElementById('gameModal').classList.add('active');
+            loadGameContent(gameNum);
+        }
+
+        function loadGameContent(gameNum) {
+            const gameFrame = document.getElementById('gameFrame');
+            gameFrame.innerHTML = `
+                <div style="text-align: center; padding: 50px;">
+                    <h2>Dit is ${GAMES_CONFIG[gameNum].name}</h2>
+                    <p style="color: #666; margin: 20px 0;">
+                        Hier komt de HTML-code van spel ${gameNum}.<br>
+                        Vervang deze sectie in de <code>loadGameContent</code> functie.
+                    </p>
+                    <p style="background: #fff3cd; padding: 15px; border-radius: 5px; margin-top: 20px;">
+                        💡 Minimale score om door te gaan: <strong>${GAMES_CONFIG[gameNum].minScore}</strong>
+                    </p>
+                </div>
+            `;
+        }
+
+        function closeGame() {
+            document.getElementById('gameModal').classList.remove('active');
+            currentGame = null;
+        }
+
+        function submitScore() {
+            if (!currentGame) return;
+
+            const score = parseInt(document.getElementById('scoreInput').value);
+            const minScore = GAMES_CONFIG[currentGame].minScore;
+
+            if (isNaN(score) || score < 0) {
+                alert('Voer een geldige score in!');
+                return;
+            }
+
+            const studentData = getFromStorage('student_' + currentUser.id);
+            studentData.scores[currentGame] = score;
+            studentData.lastActive = new Date().toISOString();
+
+            if (score >= minScore) {
+                const unlocks = GAMES_CONFIG[currentGame].unlocks;
+                unlocks.forEach(gameId => {
+                    if (gameId === 9) {
+                        if (studentData.scores[5] >= GAMES_CONFIG[5].minScore && 
+                            studentData.scores[8] >= GAMES_CONFIG[8].minScore) {
+                            studentData.progress[9] = { unlocked: true };
+                        }
+                    } else {
+                        studentData.progress[gameId] = { unlocked: true };
+                    }
+                });
+                alert(`Gefeliciteerd! Score: ${score}. Je hebt nieuwe spellen unlocked!`);
+            } else {
+                alert(`Score: ${score}. Minimaal ${minScore} punten nodig om door te gaan. Probeer opnieuw!`);
+            }
+
+            saveToStorage('student_' + currentUser.id, studentData);
+            document.getElementById('scoreInput').value = '';
+            closeGame();
+            updateSkillTree();
+            setTimeout(drawConnections, 100);
+        }
+
+        function logout() {
+            currentUser = null;
+            document.getElementById('skillTreeView').classList.add('hidden');
+            document.getElementById('teacherDashboard').classList.add('hidden');
+            document.getElementById('loginScreen').classList.remove('hidden');
+            document.getElementById('studentName').value = '';
+            document.getElementById('studentClass').value = '';
+            document.getElementById('teacherPassword').value = '';
+        }
+
+        function showTeacherDashboard() {
+            document.getElementById('loginScreen').classList.add('hidden');
+            document.getElementById('teacherDashboard').classList.remove('hidden');
+            loadStudentsData();
+            loadSettings();
+        }
+
+        function showTab(tab) {
+            const tabs = ['students', 'settings'];
+            tabs.forEach(t => {
+                document.getElementById(t + 'Tab').classList.toggle('hidden', t !== tab);
+                document.getElementById(t + 'TabBtn').classList.toggle('active', t === tab);
+            });
+        }
+
+        function loadStudentsData() {
+            const allStudents = getFromStorage('allStudents') || [];
+            const tbody = document.getElementById('studentsTableBody');
+            const classFilter = document.getElementById('classFilter');
+            
+            const classes = [...new Set(allStudents.map(s => s.class))];
+            classFilter.innerHTML = '<option value="">Alle klassen</option>';
+            classes.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c;
+                opt.textContent = c;
+                classFilter.appendChild(opt);
+            });
+
+            tbody.innerHTML = '';
+            allStudents.forEach(student => {
+                const data = getFromStorage('student_' + student.id);
+                if (!data) return;
+
+                const completedGames = Object.keys(data.scores).length;
+                const progressPercent = Math.round((completedGames / 9) * 100);
+                const lastActive = new Date(data.lastActive).toLocaleDateString('nl-NL');
+
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${student.name}</td>
+                    <td>${student.class}</td>
+                    <td>${completedGames}/9 (${progressPercent}%)</td>
+                    <td>${lastActive}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function filterStudents() {
+            const filter = document.getElementById('classFilter').value;
+            const rows = document.querySelectorAll('#studentsTableBody tr');
+            
+            rows.forEach(row => {
+                const classCell = row.cells[1].textContent;
+                row.style.display = (!filter || classCell === filter) ? '' : 'none';
+            });
+        }
+
+        function loadSettings() {
+            const container = document.getElementById('scoreSettingsContainer');
+            container.innerHTML = '';
+
+            for (let i = 1; i <= 9; i++) {
+                const div = document.createElement('div');
+                div.className = 'input-group';
+                div.innerHTML = `
+                    <label>Spel ${i} - ${GAMES_CONFIG[i].name}:</label>
+                    <input type="number" id="minScore${i}" value="${GAMES_CONFIG[i].minScore}" min="0" max="100">
+                `;
+                container.appendChild(div);
+            }
+        }
+
+        function saveSettings() {
+            for (let i = 1; i <= 9; i++) {
+                const value = parseInt(document.getElementById('minScore' + i).value);
+                if (!isNaN(value) && value >= 0) {
+                    GAMES_CONFIG[i].minScore = value;
+                }
+            }
+            saveToStorage('gamesConfig', GAMES_CONFIG);
+            alert('Instellingen opgeslagen!');
+        }
+
+        function changePassword() {
+            const newPass = document.getElementById('newPassword').value;
+            if (!newPass || newPass.length < 4) {
+                alert('Wachtwoord moet minimaal 4 karakters zijn!');
+                return;
+            }
+            teacherPassword = newPass;
+            saveToStorage('teacherPassword', newPass);
+            document.getElementById('newPassword').value = '';
+            alert('Wachtwoord succesvol gewijzigd!');
+        }
+
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>
