@@ -783,24 +783,25 @@
         function loadGameContent(gameNum) {
             const gameFrame = document.getElementById('gameFrame');
 
-                switch (gameNum) {
-                case 1:
-                gameFrame.innerHTML = <div>Hier jouw HTML van spel 1</div> ;
-                break;
-
-                case 2:
-                  gameFrame.innerHTML = `
-                    <div>Hier jouw HTML van spel 2</div>
-                  `;
-          break;
-
-        default:
-                        
-        gameFrame.innerHTML = `<div>Onbekend spel</div>`;
-
-
+            const games = {
+                1: `
+                <!--PLAK HIER-->
+                `, 
+                
+                2: `
+                <!-- Plak hier de VOLLEDIGE HTML-code van spel 2 -->
+                `,
+                
+            if (games[gameNum]) {
+                gameFrame.innerHTML = games[gameNum];
+            } else {
+                gameFrame.innerHTML = `
+                    <div style="text-align: center; padding: 50px;">
+                        <p>Spel ${gameNum} is nog niet toegevoegd.</p>
+                    </div>
+                `;
+            }
         }
-    }
 
         function closeGame() {
             document.getElementById('gameModal').classList.remove('active');
