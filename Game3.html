@@ -82,7 +82,7 @@
 
       // --- From utils/SoundManager.ts ---
       let audioContext = null;
-      const initAudio = () => {
+      const initAudio = async () => {
         if (!audioContext) {
           try {
             audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -90,9 +90,13 @@
             console.error("Web Audio API is not supported in this browser");
           }
         }
+        // Resume the audio context if it's in a suspended state (required by modern browsers)
+        if (audioContext && audioContext.state === 'suspended') {
+          await audioContext.resume();
+        }
       };
       const playSound = (type, frequency, duration, volume = 0.5) => {
-        if (!audioContext) return;
+        if (!audioContext || audioContext.state !== 'running') return;
         const oscillator = audioContext.createOscillator();
         const gainNode = audioContext.createGain();
         oscillator.connect(gainNode);
@@ -385,11 +389,11 @@
         const keysPressed = useRef({});
         const gameLoopRef = useRef(null);
         const lastArrowSpawnTime = useRef(Date.now());
-        const gameStateRef = useRef({ score, lives, level, arrows, playerX, selectedAmmo });
+        const gameStateRef = useRef({ score, lives, level, arrows, projectiles, playerX, selectedAmmo });
 
         useEffect(() => {
-          gameStateRef.current = { score, lives, level, arrows, playerX, selectedAmmo };
-        }, [score, lives, level, arrows, playerX, selectedAmmo]);
+          gameStateRef.current = { score, lives, level, arrows, projectiles, playerX, selectedAmmo };
+        }, [score, lives, level, arrows, projectiles, playerX, selectedAmmo]);
 
         const removeExplosion = useCallback((id) => {
           setExplosions(prev => prev.filter(exp => exp.id !== id));
@@ -461,72 +465,75 @@
               });
             }
 
-            const { level: currentLevel } = gameStateRef.current;
+            const { level: currentLevel, arrows: currentArrows, projectiles: currentProjectiles, lives: previousLives, score: previousScore } = gameStateRef.current;
             const arrowSpeed = BASE_ARROW_SPEED + (currentLevel - 1) * 0.3;
 
-            setArrows(prevArrows =>
-              prevArrows
+            let livesToLose = 0;
+            let scoreToAdd = 0;
+            const explosionsToAdd = [];
+            const hitArrowIds = new Set();
+            
+            // 1. Calculate projectile and collision outcomes
+            const nextProjectiles = currentProjectiles
+                .map(p => ({ ...p, y: p.y - PROJECTILE_SPEED }))
+                .filter(p => {
+                    if (p.y <= -PROJECTILE_HEIGHT) return false;
+
+                    const hitArrow = currentArrows.find(arrow => !hitArrowIds.has(arrow.id) && checkCollision(p, arrow));
+                    if (hitArrow) {
+                        hitArrowIds.add(hitArrow.id);
+                        explosionsToAdd.push({ id: Date.now() + Math.random(), x: p.x, y: p.y, type: p.type });
+                        if (p.type === hitArrow.type) {
+                            playHitCorrect();
+                            scoreToAdd += 10;
+                        } else {
+                            playHitIncorrect();
+                            livesToLose += 1;
+                        }
+                        return false; // Projectile is consumed
+                    }
+                    return true; // Projectile continues
+                });
+
+            // 2. Calculate arrow outcomes
+            const nextArrows = currentArrows
+                .filter(a => !hitArrowIds.has(a.id))
                 .map(arrow => ({ ...arrow, y: arrow.y + arrowSpeed }))
                 .filter(arrow => {
-                  if (arrow.y > GAME_HEIGHT) {
-                    playLoseLife();
-                    setLives(l => Math.max(0, l - 1));
-                    return false;
-                  }
-                  return true;
-                })
-            );
+                    if (arrow.y > GAME_HEIGHT) {
+                        playLoseLife();
+                        livesToLose += 1;
+                        return false;
+                    }
+                    return true;
+                });
             
-            setProjectiles(prevProjectiles =>
-              prevProjectiles
-                .map(p => ({ ...p, y: p.y - PROJECTILE_SPEED }))
-                .filter(p => p.y > -PROJECTILE_HEIGHT)
-            );
+            // 3. Apply all state changes at once
+            setProjectiles(nextProjectiles);
+            setArrows(nextArrows);
+            if (explosionsToAdd.length > 0) setExplosions(prev => [...prev, ...explosionsToAdd]);
+            if (livesToLose > 0) setLives(l => Math.max(0, l - livesToLose));
+            if (scoreToAdd > 0) setScore(s => s + scoreToAdd);
 
-            const hitArrowIds = new Set();
-            setProjectiles(currentProjectiles => {
-              const remainingProjectiles = currentProjectiles.filter(projectile => {
-                  const hitArrow = gameStateRef.current.arrows.find(arrow => 
-                      !hitArrowIds.has(arrow.id) && checkCollision(projectile, arrow)
-                  );
-                  if (hitArrow) {
-                      hitArrowIds.add(hitArrow.id);
-                      const newExplosion = { id: Date.now() + Math.random(), x: projectile.x, y: projectile.y, type: projectile.type };
-                      setExplosions(prev => [...prev, newExplosion]);
-                      if (projectile.type === hitArrow.type) {
-                          playHitCorrect();
-                          setScore(s => s + 10);
-                      } else {
-                          playHitIncorrect();
-                          playLoseLife();
-                          setLives(l => Math.max(0, l - 1));
-                      }
-                      return false;
-                  }
-                  return true;
-              });
-              if (hitArrowIds.size > 0) {
-                  setArrows(currentArrows => currentArrows.filter(a => !hitArrowIds.has(a.id)));
-              }
-              return remainingProjectiles;
-            });
+            // 4. Check for game over
+            if (previousLives > 0 && (previousLives - livesToLose) <= 0) {
+              onGameOver(previousScore + scoreToAdd);
+              return;
+            }
 
+            // 5. Spawn new arrows
             if (Date.now() - lastArrowSpawnTime.current > ARROW_SPAWN_INTERVAL / (1 + (currentLevel - 1) * 0.15)) {
               spawnArrow();
               lastArrowSpawnTime.current = Date.now();
             }
 
-            const { score: currentScore, lives: currentLives } = gameStateRef.current;
-            if (currentScore > currentLevel * 100) {
+            // 6. Update Level
+            if (previousScore + scoreToAdd > currentLevel * 100) {
               playLevelUp();
               setLevel(l => l + 1);
               setLives(l => Math.min(MAX_LIVES, l + 1));
             }
-
-            if (currentLives <= 0) {
-              onGameOver(currentScore);
-              return;
-            }
+            
             gameLoopRef.current = requestAnimationFrame(gameLoop);
           };
           gameLoopRef.current = requestAnimationFrame(gameLoop);
@@ -557,8 +564,8 @@
         const [gameState, setGameState] = useState('MainMenu');
         const [score, setScore] = useState(0);
 
-        const startGame = useCallback(() => {
-          initAudio();
+        const startGame = useCallback(async () => {
+          await initAudio();
           playButtonClick();
           setScore(0);
           setGameState('Playing');
