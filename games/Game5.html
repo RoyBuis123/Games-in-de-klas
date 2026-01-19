@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="nl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hellingproef Spel</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+      body {
+        font-family: 'Nunito', sans-serif;
+        background-color: #f1f5f9; /* slate-100 */
+      }
+      @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .animate-fade-in-up {
+        animation: fadeInUp 0.5s ease-out forwards;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module">
+      import React, { StrictMode, useState, useCallback, useEffect, useRef } from 'https://esm.sh/react@18';
+      import ReactDOM from 'https://esm.sh/react-dom@18/client';
+
+      // --- constants.ts ---
+      const TOTAL_LIVES = 3;
+      const TOTAL_QUESTIONS = 10;
+      const QUESTION_TIME_LIMIT = 15; // Iets ruimer voor MBO
+      const BASE_POINTS_PER_QUESTION = 10; // 10 vragen * 10 punten = 100 max
+
+      // --- components/icons/HeartIcon.tsx ---
+      const HeartIcon = ({ filled = true }) => {
+        return (
+          React.createElement('svg', {
+            xmlns: "http://www.w3.org/2000/svg",
+            viewBox: "0 0 20 20",
+            className: `w-6 h-6 transition-all duration-300 ${filled ? 'text-red-500' : 'text-slate-300'}`,
+            fill: "currentColor"
+          },
+          React.createElement('path', {
+            fillRule: "evenodd",
+            clipRule: "evenodd",
+            d: "M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z"
+          }))
+        );
+      };
+      
+      // --- components/Diagram.tsx ---
+      const Diagram = ({ forceUp, forceDown }) => {
+        const width = 400;
+        const height = 250;
+        const angleDegrees = 20;
+        const angleRad = angleDegrees * (Math.PI / 180);
+      
+        const slopeStartX = 30;
+        const slopeEndX = width - 30;
+        const slopeStartY = height - 50;
+        const slopeEndY = slopeStartY - (slopeEndX - slopeStartX) * Math.tan(angleRad);
+
+        const mountainPath = `M -5 250 L ${slopeStartX - 20} 250 L ${slopeStartX} ${slopeStartY} L ${slopeEndX} ${slopeEndY} L ${width + 5} ${slopeEndY} L ${width + 5} 250 Z`;
+      
+        const cartHeight = 30;
+        const wheelRadius = 8;
+      
+        const cartX = width / 2;
+        const cartBottomYOnSlope = slopeStartY - (cartX - slopeStartX) * Math.tan(angleRad);
+        const cartTransformY = cartBottomYOnSlope - wheelRadius;
+        
+        const cartBodyCenterY = cartTransformY - cartHeight / 2;
+
+        const scaleFactor = 0.8;
+        const fHellingLength = forceDown * scaleFactor;
+        const fWrijvingLength = forceUp * scaleFactor;
+      
+        const fHellingStartX = cartX;
+        const fHellingStartY = cartBodyCenterY;
+        const fHellingEndX = fHellingStartX - fHellingLength * Math.cos(angleRad);
+        const fHellingEndY = fHellingStartY + fHellingLength * Math.sin(angleRad);
+      
+        const fWrijvingStartX = cartX;
+        const fWrijvingStartY = cartBodyCenterY;
+        const fWrijvingEndX = fWrijvingStartX + fWrijvingLength * Math.cos(angleRad);
+        const fWrijvingEndY = fWrijvingStartY - fWrijvingLength * Math.sin(angleRad);
+      
+        return (
+          React.createElement('div', { className: 'bg-white rounded-xl shadow-inner p-4 flex justify-center items-center overflow-hidden border border-slate-200' },
+            React.createElement('svg', { width: width, height: height, viewBox: `0 0 ${width} ${height}`, className: 'rounded-lg' },
+              React.createElement('defs', null,
+                React.createElement('linearGradient', { id: 'skyGradient', x1: '0%', y1: '0%', x2: '0%', y2: '100%' },
+                  React.createElement('stop', { offset: '0%', style: { stopColor: '#bae6fd', stopOpacity: 1 } }),
+                  React.createElement('stop', { offset: '100%', style: { stopColor: '#f0f9ff', stopOpacity: 1 } })
+                ),
+                React.createElement('linearGradient', { id: 'mountainGradient', x1: '0%', y1: '0%', x2: '0%', y2: '100%' },
+                  React.createElement('stop', { offset: '0%', style: { stopColor: '#4ade80', stopOpacity: 1 } }),
+                  React.createElement('stop', { offset: '100%', style: { stopColor: '#16a34a', stopOpacity: 1 } })
+                ),
+                React.createElement('marker', {
+                  id: 'arrow-blue', viewBox: '0 0 10 10', refX: '8', refY: '5',
+                  markerWidth: '6', markerHeight: '6', orient: 'auto-start-reverse', fill: '#3b82f6'
+                }, React.createElement('path', { d: 'M 0 0 L 10 5 L 0 10 z' })),
+                React.createElement('marker', {
+                  id: 'arrow-red', viewBox: '0 0 10 10', refX: '8', refY: '5',
+                  markerWidth: '6', markerHeight: '6', orient: 'auto-start-reverse', fill: '#ef4444'
+                }, React.createElement('path', { d: 'M 0 0 L 10 5 L 0 10 z' }))
+              ),
+              React.createElement('rect', { width: '100%', height: '100%', fill: 'url(#skyGradient)' }),
+              React.createElement('path', { d: mountainPath, fill: 'url(#mountainGradient)', stroke: '#15803d', strokeWidth: '1.5' }),
+      
+              // Karretje
+              React.createElement('g', { transform: `translate(${cartX}, ${cartTransformY}) rotate(${-angleDegrees})` },
+                React.createElement('path', { d: 'M -25 -25 L 25 -25 L 20 -5 L -20 -5 Z', fill: '#f8fafc', stroke: '#64748b', strokeWidth: '2' }),
+                React.createElement('circle', { cx: '-15', cy: '0', r: wheelRadius, fill: '#334155' }),
+                React.createElement('circle', { cx: '15', cy: '0', r: wheelRadius, fill: '#334155' })
+              ),
+      
+              // F Helling
+              React.createElement('line', {
+                x1: fHellingStartX, y1: fHellingStartY,
+                x2: fHellingEndX, y2: fHellingEndY,
+                stroke: '#3b82f6', strokeWidth: '4', markerEnd: 'url(#arrow-blue)'
+              }),
+              React.createElement('text', {
+                x: fHellingEndX, y: fHellingEndY + 20, fill: '#1d4ed8', className: 'font-bold text-xs', textAnchor: 'middle'
+              }, `Fh = ${forceDown}N`),
+      
+              // F Wrijving
+              React.createElement('line', {
+                x1: fWrijvingStartX, y1: fWrijvingStartY,
+                x2: fWrijvingEndX, y2: fWrijvingEndY,
+                stroke: '#ef4444', strokeWidth: '4', markerEnd: 'url(#arrow-red)'
+              }),
+              React.createElement('text', {
+                x: fWrijvingEndX, y: fWrijvingEndY - 10, fill: '#b91c1c', className: 'font-bold text-xs', textAnchor: 'middle'
+              }, `Fw = ${forceUp}N`)
+            )
+          )
+        );
+      };
+      
+      // --- components/StatusBar.tsx ---
+      const StatusBar = ({ lives, score, questionNumber, totalQuestions }) => {
+        return (
+          React.createElement('div', { className: 'flex justify-between items-center bg-white rounded-xl shadow-md p-4 w-full border border-slate-100' },
+            React.createElement('div', { className: 'flex items-center space-x-2' },
+              React.createElement('div', { className: 'flex' },
+                Array.from({ length: TOTAL_LIVES }).map((_, i) => React.createElement(HeartIcon, { key: i, filled: i < lives }))
+              )
+            ),
+            React.createElement('div', { className: 'font-black text-slate-700' },
+              `Vraag ${questionNumber} / ${totalQuestions}`
+            ),
+            React.createElement('div', { className: 'font-black text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full' },
+              `Score: ${score}`
+            )
+          )
+        );
+      };
+
+      // --- components/GameScreen.tsx ---
+      const GameScreen = ({ question, onAnswer, lives, score, questionNumber, totalQuestions }) => {
+        const [timeLeft, setTimeLeft] = useState(QUESTION_TIME_LIMIT);
+        const [feedback, setFeedback] = useState(null);
+        const animationFrameRef = useRef(null);
+        const startTimeRef = useRef(null);
+        const answeredRef = useRef(false);
+
+        const translateAnswer = (answer) => {
+            if (answer === 'accelerate') return 'Versnellen';
+            if (answer === 'decelerate') return 'Vertragen';
+            return 'Constante snelheid';
+        };
+
+        const handleAnswer = useCallback((answer) => {
+            if (answeredRef.current) return;
+            answeredRef.current = true;
+            cancelAnimationFrame(animationFrameRef.current);
+
+            const isCorrect = question.correctAnswer === answer;
+            setFeedback({
+                correct: isCorrect,
+                message: isCorrect ? 'Helemaal juist!' : `Niet goed. Het juiste antwoord was: ${translateAnswer(question.correctAnswer)}`
+            });
+
+            onAnswer(answer);
+        }, [question, onAnswer]);
+
+        useEffect(() => {
+            setTimeLeft(QUESTION_TIME_LIMIT);
+            setFeedback(null);
+            answeredRef.current = false;
+            startTimeRef.current = Date.now();
+
+            const tick = () => {
+                if (answeredRef.current) return;
+                const elapsed = (Date.now() - startTimeRef.current) / 1000;
+                const remaining = Math.max(0, QUESTION_TIME_LIMIT - elapsed);
+                setTimeLeft(remaining);
+                if (remaining === 0) {
+                    handleAnswer('timeout');
+                } else {
+                    animationFrameRef.current = requestAnimationFrame(tick);
+                }
+            };
+            animationFrameRef.current = requestAnimationFrame(tick);
+            return () => cancelAnimationFrame(animationFrameRef.current);
+        }, [question.id, handleAnswer]);
+        
+        const progressPercentage = (timeLeft / QUESTION_TIME_LIMIT) * 100;
+
+        return (
+          React.createElement('div', { className: 'min-h-screen flex flex-col items-center justify-center p-4' },
+            React.createElement('div', { className: 'w-full max-w-2xl mx-auto space-y-6' },
+              React.createElement(StatusBar, { lives, score, questionNumber, totalQuestions }),
+              React.createElement(Diagram, { forceUp: question.forceUp, forceDown: question.forceDown }),
+              React.createElement('div', { className: 'text-center space-y-4' },
+                React.createElement('h2', { className: 'text-2xl font-black text-slate-800' }, 'Wat gebeurt er met de snelheid?'),
+                React.createElement('div', { className: 'w-full bg-slate-200 rounded-full h-3 overflow-hidden shadow-inner' },
+                  React.createElement('div', {
+                    className: 'bg-indigo-500 h-full transition-all duration-100 linear',
+                    style: { width: `${progressPercentage}%` }
+                  })
+                ),
+                !feedback ?
+                React.createElement('div', { className: 'grid grid-cols-1 md:grid-cols-3 gap-4 pt-2' },
+                  React.createElement('button', {
+                    onClick: () => handleAnswer('accelerate'),
+                    className: 'bg-white border-2 border-blue-500 text-blue-600 font-black py-4 rounded-xl hover:bg-blue-500 hover:text-white transition-all shadow-md active:scale-95'
+                  }, 'Versnellen'),
+                  React.createElement('button', {
+                    onClick: () => handleAnswer('constant'),
+                    className: 'bg-white border-2 border-green-500 text-green-600 font-black py-4 rounded-xl hover:bg-green-500 hover:text-white transition-all shadow-md active:scale-95'
+                  }, 'Constant'),
+                  React.createElement('button', {
+                    onClick: () => handleAnswer('decelerate'),
+                    className: 'bg-white border-2 border-red-500 text-red-600 font-black py-4 rounded-xl hover:bg-red-500 hover:text-white transition-all shadow-md active:scale-95'
+                  }, 'Vertragen')
+                ) :
+                React.createElement('div', {
+                    className: `p-6 rounded-xl text-xl font-black animate-fade-in-up shadow-lg ${feedback.correct ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`
+                }, feedback.message)
+              )
+            )
+          )
+        );
+      };
+
+      // --- components/GameOverOverlay.tsx ---
+      const GameOverOverlay = ({ score, onRestart, reason }) => {
+        return (
+          React.createElement('div', { className: 'fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 z-50' },
+            React.createElement('div', { className: 'bg-white p-8 md:p-12 rounded-3xl shadow-2xl max-w-md w-full text-center animate-fade-in-up' },
+              React.createElement('div', { className: 'text-6xl mb-4' }, reason === 'lives' ? '❌' : '🏆'),
+              React.createElement('h1', { className: 'text-4xl font-black text-slate-800 mb-2' }, reason === 'lives' ? 'Helaas!' : 'Geweldig!'),
+              React.createElement('p', { className: 'text-slate-600 mb-6 font-bold' }, 
+                reason === 'lives' ? 'Je levens zijn helaas op.' : 'Je hebt alle vragen beantwoord!'
+              ),
+              React.createElement('div', { className: 'bg-slate-100 rounded-2xl p-6 mb-8' },
+                React.createElement('p', { className: 'text-slate-500 uppercase tracking-widest font-black text-sm mb-1' }, 'Eindscore'),
+                React.createElement('p', { className: 'text-6xl font-black text-indigo-600' }, `${score}/100`)
+              ),
+              React.createElement('button', {
+                onClick: onRestart,
+                className: 'w-full py-4 bg-indigo-600 text-white font-black rounded-xl hover:bg-indigo-700 transition-all shadow-xl active:scale-95 text-lg'
+              }, 'Nog een keer')
+            )
+          )
+        );
+      };
+
+      // --- App.tsx ---
+      const App = () => {
+        const [gameStatus, setGameStatus] = useState('start');
+        const [gameOverReason, setGameOverReason] = useState(null);
+        const [questions, setQuestions] = useState([]);
+        const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+        const [score, setScore] = useState(0);
+        const [lives, setLives] = useState(TOTAL_LIVES);
+
+        const generateQuestions = useCallback(() => {
+          const newQuestions = [];
+          const answerTypes = ['accelerate', 'constant', 'decelerate'];
+          for (let i = 0; i < TOTAL_QUESTIONS; i++) {
+            const correctAnswer = answerTypes[Math.floor(Math.random() * answerTypes.length)];
+            let forceDown, forceUp;
+            if (correctAnswer === 'accelerate') {
+                forceUp = Math.floor(Math.random() * 40) + 10;
+                forceDown = forceUp + Math.floor(Math.random() * 30) + 10;
+            } else if (correctAnswer === 'decelerate') {
+                forceDown = Math.floor(Math.random() * 40) + 10;
+                forceUp = forceDown + Math.floor(Math.random() * 30) + 10;
+            } else {
+                forceDown = Math.floor(Math.random() * 50) + 20;
+                forceUp = forceDown;
+            }
+            newQuestions.push({ id: i, forceDown, forceUp, correctAnswer });
+          }
+          setQuestions(newQuestions);
+        }, []);
+
+        const handleStartGame = () => {
+          setScore(0);
+          setLives(TOTAL_LIVES);
+          setCurrentQuestionIndex(0);
+          setGameOverReason(null);
+          generateQuestions();
+          setGameStatus('playing');
+        };
+
+        const handleAnswer = useCallback((answer) => {
+            const isCorrect = questions[currentQuestionIndex].correctAnswer === answer;
+            
+            setTimeout(() => {
+                if (isCorrect) {
+                    setScore(s => s + BASE_POINTS_PER_QUESTION);
+                } else {
+                    setLives(l => {
+                        const newLives = l - 1;
+                        if (newLives <= 0) {
+                            setGameOverReason('lives');
+                            setGameStatus('game-over');
+                        }
+                        return newLives;
+                    });
+                }
+
+                if (gameStatus !== 'game-over') {
+                    if (currentQuestionIndex + 1 >= TOTAL_QUESTIONS) {
+                        setGameOverReason('completed');
+                        setGameStatus('game-over');
+                    } else {
+                        setLives(l => {
+                            if (l > 0) setCurrentQuestionIndex(i => i + 1);
+                            return l;
+                        });
+                    }
+                }
+            }, 2000);
+        }, [currentQuestionIndex, questions, gameStatus]);
+
+        if (gameStatus === 'start') {
+          return (
+            React.createElement('div', { className: 'min-h-screen bg-slate-100 flex flex-col items-center justify-center p-4' },
+              React.createElement('div', {className: 'bg-white p-10 md:p-16 rounded-3xl shadow-2xl max-w-2xl text-center border-b-8 border-indigo-200'},
+                React.createElement('h1', { className: 'text-5xl md:text-7xl font-black text-slate-800 mb-6' }, 'Hellingproef'),
+                React.createElement('p', { className: 'text-xl text-slate-600 mb-10 leading-relaxed font-bold' },
+                  'Versnelt het karretje of vertraagt het? Vergelijk de krachten en scoor maximaal 100 punten!'
+                ),
+                React.createElement('button', {
+                  onClick: handleStartGame,
+                  className: 'px-12 py-5 bg-indigo-600 text-white font-black rounded-2xl hover:bg-indigo-700 transition-all shadow-xl active:scale-95 text-2xl'
+                }, 'Start Spel')
+              )
+            )
+          );
+        }
+
+        return React.createElement(React.Fragment, null,
+          React.createElement(GameScreen, {
+              question: questions[currentQuestionIndex],
+              onAnswer: handleAnswer,
+              lives: lives,
+              score: score,
+              questionNumber: currentQuestionIndex + 1,
+              totalQuestions: TOTAL_QUESTIONS
+          }),
+          gameStatus === 'game-over' && React.createElement(GameOverOverlay, { 
+            score: score, 
+            onRestart: () => setGameStatus('start'),
+            reason: gameOverReason
+          })
+        );
+      };
+
+      const root = ReactDOM.createRoot(document.getElementById('root'));
+      root.render(React.createElement(StrictMode, null, React.createElement(App)));
+    </script>
+  </body>
+</html>
