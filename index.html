@@ -782,26 +782,36 @@
 
         function loadGameContent(gameNum) {
             const gameFrame = document.getElementById('gameFrame');
-
-            const games = {
-                1: `
-                <!--PLAK HIER-->
-                `, 
-                
-                2: `
-                <!-- Plak hier de VOLLEDIGE HTML-code van spel 2 -->
-                `,
-            };
-                
-            if (games[gameNum]) {
-                gameFrame.innerHTML = games[gameNum];
-            } else {
-                gameFrame.innerHTML = `
-                    <div style="text-align: center; padding: 50px;">
-                        <p>Spel ${gameNum} is nog niet toegevoegd.</p>
-                    </div>
-                `;
-            }
+    
+            // Toon een laad-indicator
+            gameFrame.innerHTML = `
+                <div style="text-align: center; padding: 50px;">
+                    <p>Spel wordt geladen...</p>
+                </div>
+            `;
+    
+            // Laad het spel van de games map
+            fetch(`games/spel${gameNum}.html`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Spel niet gevonden');
+                    }
+                    return response.text();
+                })
+                .then(html => {
+                    gameFrame.innerHTML = html;
+                })
+                .catch(error => {
+                    gameFrame.innerHTML = `
+                        <div style="text-align: center; padding: 50px;">
+                            <h3>❌ Spel ${gameNum} kon niet worden geladen</h3>
+                            <p style="color: #999;">Zorg dat het bestand "games/spel${gameNum}.html" bestaat in je repository.</p>
+                            <p style="background: #fff3cd; padding: 15px; border-radius: 5px; margin-top: 20px;">
+                                💡 Minimale score om door te gaan: <strong>${GAMES_CONFIG[gameNum].minScore}</strong>
+                            </p>
+                        </div>
+                    `;
+                });
         }
 
         function closeGame() {
