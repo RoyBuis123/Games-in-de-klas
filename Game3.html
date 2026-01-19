@@ -167,17 +167,27 @@
 
       // --- From components/Player.tsx ---
       const Player = ({ x }) => {
+        const points = `${PLAYER_WIDTH / 2},0 ${PLAYER_WIDTH},${PLAYER_HEIGHT} 0,${PLAYER_HEIGHT}`;
         return (
-          <div
-            className="absolute bg-cyan-400 rounded-t-md"
+          <svg
+            className="absolute"
             style={{
-              left: x,
+              transform: `translateX(${x}px)`,
+              willChange: 'transform',
               bottom: PLAYER_Y_OFFSET - PLAYER_HEIGHT,
               width: PLAYER_WIDTH,
               height: PLAYER_HEIGHT,
-              boxShadow: '0 0 15px rgba(0, 255, 255, 0.7)',
+              filter: 'drop-shadow(0 0 10px rgba(0, 255, 255, 0.7)) drop-shadow(0 0 4px rgba(150, 255, 255, 0.8))',
             }}
-          />
+            viewBox={`0 0 ${PLAYER_WIDTH} ${PLAYER_HEIGHT}`}
+          >
+            <polygon
+                points={points}
+                className="fill-cyan-500 stroke-cyan-300"
+                strokeWidth="2"
+                strokeLinejoin="round"
+            />
+          </svg>
         );
       };
 
