@@ -4,18 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Physics Stunt Challenge</title>
-    
-    <!-- Tailwind CSS -->
+
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- FontAwesome -->
+
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    
-    <!-- React & ReactDOM (UMD for standalone usage) -->
+
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    
-    <!-- Babel (to compile JSX in browser) -->
+
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
@@ -41,8 +37,7 @@
       .text-shadow-md {
         text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.5);
       }
-      
-      /* Glassmorphism utilities */
+
       .glass-panel {
         background: rgba(255, 255, 255, 0.2);
         backdrop-filter: blur(8px);
@@ -64,12 +59,24 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useMemo, useCallback, useEffect } = React;
+        const { useState, useMemo, useCallback, useEffect, useRef } = React;
 
-        // --- CONSTANTS ---
+        function sendScoreToPlatform(score100) {
+            const params = new URLSearchParams(window.location.search);
+            const raw = params.get("game");
+            const gameNum = raw !== null && raw !== "" ? Number(raw) : null;
+
+            const safeScore = Math.max(0, Math.min(100, Math.round(Number(score100) || 0)));
+
+            window.parent.postMessage(
+                { type: "GAME_SCORE", gameNum: Number.isFinite(gameNum) ? gameNum : null, score: safeScore },
+                window.location.origin
+            );
+        }
+
         const INITIAL_LIVES = 3;
         const GRAVITY = 9.81;
-        const GAME_DURATION = 300; // 5 minutes
+        const GAME_DURATION = 300;
 
         const degToRad = (degrees) => degrees * (Math.PI / 180);
 
@@ -93,7 +100,7 @@
                 text: (params) => `The ramp is tilted at ${params.angle} degrees. What's the Normal Force (Fn)? This is the perpendicular force the ramp exerts on the car.`,
                 unit: "N",
                 calculateCorrectAnswer: (params, prevAnswers) => {
-                    const weight = prevAnswers[0]; 
+                    const weight = prevAnswers[0];
                     return weight * Math.cos(degToRad(params.angle));
                 },
             },
@@ -146,9 +153,10 @@
             }
         ];
 
-        // --- COMPONENTS ---
+        const TOTAL_QUESTIONS = QUESTIONS.length;
+        const POINTS_PER_QUESTION = Math.floor(100 / TOTAL_QUESTIONS);
+        const LAST_QUESTION_POINTS = 100 - POINTS_PER_QUESTION * (TOTAL_QUESTIONS - 1);
 
-        // 1. Timer Component
         const Timer = ({ secondsRemaining }) => {
             const minutes = Math.floor(secondsRemaining / 60);
             const seconds = secondsRemaining % 60;
@@ -165,7 +173,6 @@
             );
         };
 
-        // 2. Lives Component
         const Lives = ({ count }) => {
             return (
                 <div className="flex items-center space-x-2">
@@ -179,20 +186,26 @@
             );
         };
 
-        // 3. Diagram Component
+        const Score = ({ value }) => {
+            return (
+                <div className="flex items-center space-x-2">
+                    <span className="text-xl font-bold text-slate-700">Score:</span>
+                    <span className="text-xl font-black text-sky-700">{value}/100</span>
+                </div>
+            );
+        };
+
         const Car = () => (
             <div className="relative w-12 h-8">
-                {/* Car Body - White */}
                 <div className="absolute bottom-2 left-0 w-full h-5 bg-white rounded-t-md border-2 border-gray-400" />
-                {/* Wheels - Grey */}
                 <div className="absolute bottom-0 left-1 w-4 h-4 bg-gray-500 rounded-full border-2 border-gray-600" />
                 <div className="absolute bottom-0 right-1 w-4 h-4 bg-gray-500 rounded-full border-2 border-gray-600" />
             </div>
         );
 
         const Diagram = ({ angle, inclineLength, isAnimating = false }) => {
-            const rampLength = 400; 
-            const carWidth = 48; 
+            const rampLength = 400;
+            const carWidth = 48;
             const travelDistance = rampLength - carWidth;
             const pixelsPerMeter = rampLength / inclineLength;
             const angleInRadians = angle * (Math.PI / 180);
@@ -202,18 +215,15 @@
             return (
                 <div className="w-full h-80 flex items-end justify-center mb-8 relative" aria-hidden="true">
                     <div className="relative" style={{ width: `${rampLength}px`, height: '250px' }}>
-                        {/* Ramp Group */}
-                        <div 
+                        <div
                             className="absolute bottom-0 left-0 transition-transform duration-300 ease-out"
                             style={{
                                 transform: `rotate(${-angle}deg)`,
                                 transformOrigin: 'bottom left',
                             }}
                         >
-                            {/* Green Ramp */}
                             <div className="bg-green-500 w-[400px] h-3 rounded-full shadow-inner" />
-                            
-                            {/* Car */}
+
                             <div
                                 className="absolute"
                                 style={{
@@ -226,11 +236,9 @@
                                 <Car />
                             </div>
                         </div>
-                        
-                        {/* Green Ground */}
+
                         <div className="absolute bottom-0 left-0 w-full h-1.5 bg-green-600" />
-                        
-                        {/* Angle Indicator */}
+
                         <div
                             className="absolute bottom-0 left-0 w-24 h-24 border-l-2 border-b-2 border-dashed border-white/70 rounded-bl-full"
                             style={{ transform: 'translateY(1px)'}}
@@ -239,17 +247,16 @@
                             {angle.toFixed(0)}°
                         </div>
 
-                        {/* Height Indicator */}
                         {angle > 2 && (
                             <>
-                                <div 
+                                <div
                                     className="absolute bottom-0 border-r-2 border-dashed border-white/70 transition-all duration-300 ease-out"
                                     style={{
                                         left: `${rampWidth}px`,
                                         height: `${rampHeight}px`,
                                     }}
                                 />
-                                <div 
+                                <div
                                     className="absolute text-white font-semibold transition-all duration-300 ease-out text-shadow"
                                     style={{
                                         bottom: `${rampHeight / 2 - 10}px`,
@@ -265,7 +272,6 @@
             );
         };
 
-        // 4. Screens
         const StartScreen = ({ onStart }) => (
             <div className="text-center">
                 <h1 className="text-5xl font-bold text-white mb-4 text-shadow-md">Stunt Challenge!</h1>
@@ -278,39 +284,40 @@
             </div>
         );
 
-        const GameOverScreen = ({ onRestart, reason }) => (
+        const GameOverScreen = ({ onRestart, reason, score }) => (
             <div className="text-center">
                 <h1 className="text-5xl font-bold text-white mb-4 text-shadow-md">Stunt Failed!</h1>
-                <p className="text-xl text-red-200 mb-8 text-shadow">
+                <p className="text-xl text-red-200 mb-4 text-shadow">
                     {reason === 'time' ? "You ran out of time! The window of opportunity has closed." : "Your calculations were off. Back to the drawing board!"}
                 </p>
+                <p className="text-2xl font-black text-white text-shadow mb-8">Score: {score}/100</p>
                 <button onClick={onRestart} className="bg-sky-500 text-white font-bold py-3 px-8 rounded-lg shadow-lg hover:bg-sky-600 transition-transform transform hover:scale-105">
                     Try Again
                 </button>
             </div>
         );
 
-        const GameCompleteScreen = ({ onRestart }) => (
+        const GameCompleteScreen = ({ onRestart, score }) => (
             <div className="text-center">
                 <h1 className="text-5xl font-bold text-white mb-4 text-shadow-md">Stunt Successful!</h1>
-                <p className="text-xl text-green-200 mb-8 text-shadow">Incredible work! Your calculations were perfect and the stunt was a masterpiece.</p>
+                <p className="text-xl text-green-200 mb-4 text-shadow">Incredible work! Your calculations were perfect and the stunt was a masterpiece.</p>
+                <p className="text-2xl font-black text-white text-shadow mb-8">Score: {score}/100</p>
                 <button onClick={onRestart} className="bg-sky-500 text-white font-bold py-3 px-8 rounded-lg shadow-lg hover:bg-sky-600 transition-transform transform hover:scale-105">
                     Design Another Stunt
                 </button>
             </div>
         );
 
-        const StatusBar = ({ lives, currentQuestion, totalQuestions, timeLeft }) => (
+        const StatusBar = ({ lives, currentQuestion, totalQuestions, timeLeft, score }) => (
             <div className="w-full max-w-4xl flex justify-between items-center bg-white/70 backdrop-blur-sm p-4 rounded-t-2xl shadow-md mb-[-1px] z-10">
                 <Lives count={lives} />
                 <Timer secondsRemaining={timeLeft} />
                 <div className="text-xl font-bold text-slate-700">
                     Step: <span className="text-sky-600">{currentQuestion} / {totalQuestions}</span>
                 </div>
+                <Score value={score} />
             </div>
         );
-
-        // --- MAIN APP ---
 
         const App = () => {
             const [gameParams, setGameParams] = useState(generateGameParameters());
@@ -325,14 +332,19 @@
             const [isAnimating, setIsAnimating] = useState(false);
             const [isShaking, setIsShaking] = useState(false);
 
+            const [score, setScore] = useState(0);
+            const scoreRef = useRef(score);
+            const sentScoreRef = useRef(false);
+
+            useEffect(() => { scoreRef.current = score; }, [score]);
+
             const currentQuestion = useMemo(() => QUESTIONS[currentQuestionIndex], [currentQuestionIndex]);
-            
+
             const correctAnswer = useMemo(() => {
                 if (!currentQuestion) return 0;
                 return currentQuestion.calculateCorrectAnswer(gameParams, userAnswers);
             }, [currentQuestion, gameParams, userAnswers]);
 
-            // Timer Logic
             useEffect(() => {
                 let timer;
                 if (gameState === 'playing' && timeLeft > 0) {
@@ -351,7 +363,7 @@
                 return () => clearInterval(timer);
             }, [gameState, timeLeft]);
 
-            const handleRestart = useCallback(() => {
+            const resetRunState = useCallback(() => {
                 setGameParams(generateGameParameters());
                 setLives(INITIAL_LIVES);
                 setTimeLeft(GAME_DURATION);
@@ -362,12 +374,30 @@
                 setIsAnimating(false);
                 setIsShaking(false);
                 setGameOverReason(undefined);
-                setGameState('start');
+                setScore(0);
+                sentScoreRef.current = false;
             }, []);
 
+            const handleRestart = useCallback(() => {
+                resetRunState();
+                setGameState('start');
+            }, [resetRunState]);
+
             const handleStart = useCallback(() => {
+                resetRunState();
                 setGameState('playing');
+            }, [resetRunState]);
+
+            const finishAndSendScore = useCallback((finalScore) => {
+                if (sentScoreRef.current) return;
+                sentScoreRef.current = true;
+                sendScoreToPlatform(finalScore);
             }, []);
+
+            useEffect(() => {
+                if (gameState === 'gameOver') finishAndSendScore(scoreRef.current);
+                if (gameState === 'completed') finishAndSendScore(scoreRef.current);
+            }, [gameState, finishAndSendScore]);
 
             const checkAnswer = () => {
                 const userAnswer = parseFloat(inputValue);
@@ -375,26 +405,32 @@
                     setFeedback({ message: 'Please enter a valid number.', type: 'incorrect' });
                     return;
                 }
-                
-                // Allow a margin of error (2% or absolute 0.1)
+
                 const tolerance = Math.max(Math.abs(correctAnswer * 0.02), 0.1);
                 const isCorrect = Math.abs(userAnswer - correctAnswer) < tolerance;
 
                 if (isCorrect) {
                     setFeedback({ message: 'Perfect Calculation!', type: 'correct' });
+
+                    const isLast = currentQuestionIndex >= QUESTIONS.length - 1;
+                    setScore((s) => {
+                        const add = isLast ? LAST_QUESTION_POINTS : POINTS_PER_QUESTION;
+                        return Math.max(0, Math.min(100, s + add));
+                    });
+
                     const newAnswers = [...userAnswers, correctAnswer];
                     setUserAnswers(newAnswers);
-                    
+
                     setTimeout(() => {
                         setFeedback(null);
                         setInputValue('');
-                        if (currentQuestionIndex < QUESTIONS.length - 1) {
+                        if (!isLast) {
                             setCurrentQuestionIndex(prev => prev + 1);
                         } else {
                             setIsAnimating(true);
                             setTimeout(() => {
                                 setGameState('completed');
-                            }, 2000); 
+                            }, 2000);
                         }
                     }, 1500);
 
@@ -421,7 +457,7 @@
                 if (feedback) return;
                 checkAnswer();
             };
-            
+
             const isGameActive = gameState === 'playing';
 
             const renderContent = () => {
@@ -429,16 +465,16 @@
                     case 'start':
                         return <StartScreen onStart={handleStart} />;
                     case 'gameOver':
-                        return <GameOverScreen onRestart={handleRestart} reason={gameOverReason} />;
+                        return <GameOverScreen onRestart={handleRestart} reason={gameOverReason} score={score} />;
                     case 'completed':
-                        return <GameCompleteScreen onRestart={handleRestart} />;
+                        return <GameCompleteScreen onRestart={handleRestart} score={score} />;
                     case 'playing':
                         return (
                             <div className="w-full flex flex-col items-center">
-                                <Diagram 
-                                    angle={gameParams.angle} 
-                                    isAnimating={isAnimating} 
-                                    inclineLength={gameParams.inclineLength} 
+                                <Diagram
+                                    angle={gameParams.angle}
+                                    isAnimating={isAnimating}
+                                    inclineLength={gameParams.inclineLength}
                                 />
                                 <div className="glass-panel w-full max-w-md flex flex-col items-center p-6 rounded-xl shadow-lg mt-4">
                                     <div className="text-center mb-4">
@@ -458,8 +494,8 @@
                                             />
                                             <span className="text-xl font-bold text-white text-shadow">{currentQuestion.unit}</span>
                                         </div>
-                                        <button 
-                                            type="submit" 
+                                        <button
+                                            type="submit"
                                             className="w-full mt-6 bg-white text-sky-600 font-bold py-3 px-8 rounded-lg shadow-lg hover:bg-sky-100 transition-transform transform hover:scale-105 disabled:bg-slate-400/50 disabled:text-white disabled:cursor-not-allowed disabled:scale-100"
                                             disabled={!inputValue || !!feedback || isAnimating}
                                         >
@@ -479,16 +515,17 @@
                     default:
                         return null;
                 }
-            }
-            
+            };
+
             return (
                 <div className="min-h-screen flex flex-col items-center justify-center p-4 font-sans text-slate-800">
                     {isGameActive && (
-                        <StatusBar 
-                            lives={lives} 
-                            currentQuestion={currentQuestionIndex + 1} 
+                        <StatusBar
+                            lives={lives}
+                            currentQuestion={currentQuestionIndex + 1}
                             totalQuestions={QUESTIONS.length}
-                            timeLeft={timeLeft} 
+                            timeLeft={timeLeft}
+                            score={score}
                         />
                     )}
                     <main className="w-full max-w-4xl bg-gradient-to-b from-sky-400 to-sky-600 rounded-2xl shadow-xl p-6 md:p-10 flex flex-col items-center justify-center min-h-[600px] relative overflow-hidden">
