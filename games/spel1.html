@@ -33,10 +33,22 @@
     <div id="root"></div>
 
     <script type="module">
-      import React, { useState, useEffect, useCallback } from 'react';
+      import React, { useState, useEffect, useCallback, useRef } from 'react';
       import ReactDOM from 'react-dom/client';
 
-      // --- From constants.ts ---
+      function sendScoreToPlatform(score100) {
+        const params = new URLSearchParams(window.location.search);
+        const raw = params.get('game');
+        const gameNum = raw !== null && raw !== '' ? Number(raw) : 1;
+
+        const safeScore = Math.max(0, Math.min(100, Math.round(Number(score100) || 0)));
+
+        window.parent.postMessage(
+          { type: 'GAME_SCORE', gameNum: Number.isFinite(gameNum) ? gameNum : 1, score: safeScore },
+          window.location.origin
+        );
+      }
+
       const TERM_PAIRS = [
         { en: "inclined plane",       nl: "hellend vlak" },
         { en: "angle",                nl: "hoek" },
@@ -48,7 +60,6 @@
         { en: "friction coefficient", nl: "wrijvingscoëfficiënt" }
       ];
 
-      // --- From utils/audio.ts ---
       let audioContext = null;
 
       const getAudioContext = () => {
@@ -68,7 +79,7 @@
       const playSound = (type, frequency, duration, volume = 0.1) => {
         const context = getAudioContext();
         if (!context) return;
-        
+
         if (context.state === 'suspended') {
           context.resume();
         }
@@ -78,7 +89,7 @@
 
         oscillator.type = type;
         oscillator.frequency.setValueAtTime(frequency, context.currentTime);
-        
+
         gainNode.gain.setValueAtTime(volume, context.currentTime);
         gainNode.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + duration);
 
@@ -105,15 +116,14 @@
       };
 
       const playWinSound = () => {
-          const context = getAudioContext();
-          if (!context) return;
-          const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
-          notes.forEach((note, index) => {
-              setTimeout(() => playSound('sine', note, 0.15), index * 120);
-          });
+        const context = getAudioContext();
+        if (!context) return;
+        const notes = [523.25, 659.25, 783.99, 1046.50];
+        notes.forEach((note, index) => {
+          setTimeout(() => playSound('sine', note, 0.15), index * 120);
+        });
       };
-      
-      // --- From components/Card.tsx ---
+
       const Card = ({ card, isFlipped, isMatched, onClick }) => {
         const isVisible = isFlipped || isMatched;
 
@@ -126,7 +136,7 @@
         const faceBaseClasses = "absolute w-full h-full flex items-center justify-center p-2 text-center rounded-xl border font-semibold select-none [backface-visibility:hidden]";
 
         const frontClasses = `${faceBaseClasses} bg-white border-gray-200 shadow-md group-hover:shadow-lg`;
-        
+
         const backClasses = `${faceBaseClasses} [transform:rotateY(180deg)] text-sm sm:text-base text-gray-800`;
         const backStateClasses = isMatched
           ? "bg-green-100 border-green-500 shadow-lg shadow-green-500/20"
@@ -152,8 +162,7 @@
           )
         );
       };
-      
-      // --- From App.tsx ---
+
       const App = () => {
         const [deck, setDeck] = useState([]);
         const [flippedIndices, setFlippedIndices] = useState([]);
@@ -161,6 +170,9 @@
         const [moves, setMoves] = useState(0);
         const [lockBoard, setLockBoard] = useState(false);
         const [message, setMessage] = useState({ text: '', type: 'info' });
+        const [score, setScore] = useState(0);
+
+        const sentScoreRef = useRef(false);
 
         const shuffleArray = (array) => {
           const newArray = [...array];
@@ -170,6 +182,14 @@
           }
           return newArray;
         };
+
+        const calculateScore100 = useCallback((movesCount) => {
+          const optimalMoves = TERM_PAIRS.length;
+          const extraMoves = Math.max(0, movesCount - optimalMoves);
+          const penaltyPerExtraMove = 5;
+          const result = 100 - extraMoves * penaltyPerExtraMove;
+          return Math.max(0, Math.min(100, Math.round(result)));
+        }, []);
 
         const startNewGame = useCallback(() => {
           let uniqueId = 0;
@@ -181,10 +201,12 @@
             ];
           });
 
+          sentScoreRef.current = false;
           setDeck(shuffleArray(newDeck));
           setFlippedIndices([]);
           setMatchedPairIds([]);
           setMoves(0);
+          setScore(0);
           setLockBoard(false);
           setMessage({ text: 'Zoek steeds één Engelse en één Nederlandse term die bij elkaar horen.', type: 'info' });
         }, []);
@@ -223,14 +245,24 @@
 
         useEffect(() => {
           if (matchedPairIds.length > 0 && matchedPairIds.length === TERM_PAIRS.length) {
+            const finalMoves = moves;
+            const finalScore = calculateScore100(finalMoves);
+
+            setScore(finalScore);
+
             playWinSound();
             setMessage({
-              text: `Top! Je hebt alle paren gevonden in ${moves} beurten.`,
+              text: `Top! Je hebt alle paren gevonden in ${finalMoves} beurten. Score: ${finalScore}/100.`,
               type: 'success',
             });
             setLockBoard(true);
+
+            if (!sentScoreRef.current) {
+              sentScoreRef.current = true;
+              sendScoreToPlatform(finalScore);
+            }
           }
-        }, [matchedPairIds, moves]);
+        }, [matchedPairIds, moves, calculateScore100]);
 
         const handleCardClick = (index) => {
           if (lockBoard || flippedIndices.includes(index) || matchedPairIds.includes(deck[index].pairId)) {
@@ -239,7 +271,7 @@
           playFlipSound();
           setFlippedIndices((prev) => [...prev, index]);
         };
-        
+
         const revealedPairs = matchedPairIds.map(id => TERM_PAIRS[id - 1]);
 
         return React.createElement("main", { className: "max-w-4xl w-full mx-auto p-4 sm:p-6 lg:p-8 text-gray-800" },
@@ -252,7 +284,7 @@
           ),
           React.createElement("div", { className: "bg-indigo-100 border-l-4 border-indigo-500 text-indigo-800 p-4 rounded-md my-6", role: "alert" },
             React.createElement("p", { className: "font-bold" }, "Doel van het spel:"),
-            React.createElement("p", null, "Match de juiste vertaling van de termen! Een set bestaat altijd uit één Engelse kaart en één Nederlandse kaart.")
+            React.createElement("p", null, "Match de juiste vertaling van de termen. Een set bestaat altijd uit één Engelse kaart en één Nederlandse kaart.")
           ),
           React.createElement("section", { "aria-label": "Memoryspel" },
             React.createElement("div", { className: "flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4" },
@@ -260,9 +292,10 @@
                 onClick: startNewGame,
                 className: "w-full sm:w-auto rounded-full px-6 py-2.5 text-sm font-semibold text-white bg-indigo-600 shadow-lg shadow-indigo-600/30 transition-all duration-150 hover:bg-indigo-700 hover:scale-105 hover:shadow-xl active:scale-100 active:shadow-md"
               }, "Nieuw spel starten"),
-              React.createElement("div", { className: "flex items-center justify-center gap-x-6 text-sm text-gray-600 font-medium" },
+              React.createElement("div", { className: "flex items-center justify-center gap-x-6 text-sm text-gray-600 font-medium flex-wrap" },
                 React.createElement("span", null, "Beurten: ", React.createElement("strong", { className: "text-gray-900 text-base" }, moves)),
-                React.createElement("span", null, "Gevonden paren: ", React.createElement("strong", { className: "text-gray-900 text-base" }, matchedPairIds.length), "/", TERM_PAIRS.length)
+                React.createElement("span", null, "Gevonden paren: ", React.createElement("strong", { className: "text-gray-900 text-base" }, matchedPairIds.length), "/", TERM_PAIRS.length),
+                React.createElement("span", null, "Score: ", React.createElement("strong", { className: "text-gray-900 text-base" }, score), "/100")
               )
             ),
             React.createElement("div", { className: "grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4" },
@@ -309,7 +342,6 @@
         );
       };
 
-      // --- From index.tsx ---
       const rootElement = document.getElementById('root');
       if (!rootElement) {
         throw new Error("Could not find root element to mount to");
