@@ -419,7 +419,7 @@
             <div class="skill-tree-container">
                 <div class="tree-canvas">
                     <svg id="connectionsSvg" width="100%" height="600"></svg>
-                    
+
                     <div class="tree-row" style="margin-top: 20px;">
                         <div class="game-node" id="node1" data-game="1">
                             <div class="game-number">1</div>
@@ -505,8 +505,7 @@
                             <th>Laatst Actief</th>
                         </tr>
                     </thead>
-                    <tbody id="studentsTableBody">
-                    </tbody>
+                    <tbody id="studentsTableBody"></tbody>
                 </table>
             </div>
 
@@ -514,9 +513,9 @@
                 <div class="settings-form">
                     <h3>Minimum Scores per Spel</h3>
                     <p style="margin-bottom: 20px; color: #666;">Stel hier de minimale score in die een leerling moet halen om het volgende spel te unlocken.</p>
-                    
+
                     <div id="scoreSettingsContainer"></div>
-                    
+
                     <button class="btn" id="saveSettingsBtn">Instellingen Opslaan</button>
                 </div>
 
@@ -775,32 +774,74 @@
             }
 
             currentGame = gameNum;
+            document.getElementById('scoreInput').value = '';
             document.getElementById('gameTitle').textContent = GAMES_CONFIG[gameNum].name;
             document.getElementById('gameModal').classList.add('active');
             loadGameContent(gameNum);
         }
 
         function loadGameContent(gameNum) {
-    const gameFrame = document.getElementById('gameFrame');
-    
-    // De URL van het spel
-    const gameUrl = `games/spel${gameNum}.html`;
+            const gameFrame = document.getElementById('gameFrame');
+            const gameUrl = `games/spel${gameNum}.html?game=${gameNum}`;
 
-    // Gebruik een iframe in plaats van innerHTML fetch
-    gameFrame.innerHTML = `
-        <iframe 
-            src="${gameUrl}" 
-            style="width: 100%; height: 600px; border: none;" 
-            title="Game ${gameNum}"
-            onload="console.log('Spel geladen')"
-            onerror="console.error('Fout bij laden')">
-        </iframe>
-    `;
-}
+            gameFrame.innerHTML = `
+                <iframe 
+                    id="gameIframe"
+                    src="${gameUrl}" 
+                    style="width: 100%; height: 600px; border: none;" 
+                    title="Game ${gameNum}">
+                </iframe>
+            `;
+        }
 
         function closeGame() {
             document.getElementById('gameModal').classList.remove('active');
             currentGame = null;
+        }
+
+        function applyScoreForCurrentGame(score) {
+            if (!currentGame) return;
+
+            const minScore = GAMES_CONFIG[currentGame].minScore;
+
+            if (typeof score !== 'number' || !Number.isFinite(score) || score < 0) {
+                alert('Onjuiste score vanuit het spel ontvangen.');
+                return;
+            }
+
+            const studentData = getFromStorage('student_' + currentUser.id);
+            studentData.scores = studentData.scores || {};
+            studentData.progress = studentData.progress || { 1: { unlocked: true } };
+
+            studentData.scores[currentGame] = Math.floor(score);
+            studentData.lastActive = new Date().toISOString();
+
+            if (score >= minScore) {
+                const unlocks = GAMES_CONFIG[currentGame].unlocks;
+                unlocks.forEach(gameId => {
+                    if (gameId === 9) {
+                        const s5 = studentData.scores[5];
+                        const s8 = studentData.scores[8];
+                        const ok5 = typeof s5 === 'number' && s5 >= GAMES_CONFIG[5].minScore;
+                        const ok8 = typeof s8 === 'number' && s8 >= GAMES_CONFIG[8].minScore;
+
+                        if (ok5 && ok8) {
+                            studentData.progress[9] = { unlocked: true };
+                        }
+                    } else {
+                        studentData.progress[gameId] = { unlocked: true };
+                    }
+                });
+                alert(`Gefeliciteerd! Score: ${score}. Je hebt nieuwe spellen unlocked!`);
+            } else {
+                alert(`Score: ${score}. Minimaal ${minScore} punten nodig om door te gaan. Probeer opnieuw!`);
+            }
+
+            saveToStorage('student_' + currentUser.id, studentData);
+            document.getElementById('scoreInput').value = '';
+            closeGame();
+            updateSkillTree();
+            setTimeout(drawConnections, 100);
         }
 
         function submitScore() {
@@ -822,7 +863,7 @@
                 const unlocks = GAMES_CONFIG[currentGame].unlocks;
                 unlocks.forEach(gameId => {
                     if (gameId === 9) {
-                        if (studentData.scores[5] >= GAMES_CONFIG[5].minScore && 
+                        if (studentData.scores[5] >= GAMES_CONFIG[5].minScore &&
                             studentData.scores[8] >= GAMES_CONFIG[8].minScore) {
                             studentData.progress[9] = { unlocked: true };
                         }
@@ -871,7 +912,7 @@
             const allStudents = getFromStorage('allStudents') || [];
             const tbody = document.getElementById('studentsTableBody');
             const classFilter = document.getElementById('classFilter');
-            
+
             const classes = [...new Set(allStudents.map(s => s.class))];
             classFilter.innerHTML = '<option value="">Alle klassen</option>';
             classes.forEach(c => {
@@ -886,7 +927,7 @@
                 const data = getFromStorage('student_' + student.id);
                 if (!data) return;
 
-                const completedGames = Object.keys(data.scores).length;
+                const completedGames = Object.keys(data.scores || {}).length;
                 const progressPercent = Math.round((completedGames / 9) * 100);
                 const lastActive = new Date(data.lastActive).toLocaleDateString('nl-NL');
 
@@ -904,7 +945,7 @@
         function filterStudents() {
             const filter = document.getElementById('classFilter').value;
             const rows = document.querySelectorAll('#studentsTableBody tr');
-            
+
             rows.forEach(row => {
                 const classCell = row.cells[1].textContent;
                 row.style.display = (!filter || classCell === filter) ? '' : 'none';
@@ -948,6 +989,20 @@
             document.getElementById('newPassword').value = '';
             alert('Wachtwoord succesvol gewijzigd!');
         }
+
+        window.addEventListener('message', (event) => {
+            if (event.origin !== window.location.origin) return;
+
+            const data = event.data;
+            if (!data || typeof data !== 'object') return;
+
+            if (data.type === 'GAME_SCORE') {
+                if (typeof data.gameNum === 'number' && currentGame && data.gameNum !== currentGame) {
+                    return;
+                }
+                applyScoreForCurrentGame(Number(data.score));
+            }
+        });
 
         window.addEventListener('load', init);
     </script>
