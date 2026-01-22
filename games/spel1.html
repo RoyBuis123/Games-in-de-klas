@@ -60,7 +60,6 @@
             try {
               audioContext = new (window.AudioContext || window.webkitAudioContext)();
             } catch (e) {
-              console.error("Web Audio API is not supported in this browser.", e);
               return null;
             }
           }
@@ -72,9 +71,7 @@
         const context = getAudioContext();
         if (!context) return;
 
-        if (context.state === 'suspended') {
-          context.resume();
-        }
+        if (context.state === 'suspended') context.resume();
 
         const oscillator = context.createOscillator();
         const gainNode = context.createGain();
@@ -93,19 +90,12 @@
       };
 
       const playFlipSound = () => playSound('triangle', 440, 0.1, 0.05);
-
       const playMatchSound = () => {
-        const context = getAudioContext();
-        if (!context) return;
         playSound('sine', 660, 0.1);
         setTimeout(() => playSound('sine', 880, 0.15), 100);
       };
-
       const playNoMatchSound = () => playSound('square', 220, 0.2);
-
       const playWinSound = () => {
-        const context = getAudioContext();
-        if (!context) return;
         const notes = [523.25, 659.25, 783.99, 1046.50];
         notes.forEach((note, index) => {
           setTimeout(() => playSound('sine', note, 0.15), index * 120);
@@ -115,35 +105,19 @@
       const Card = ({ card, isFlipped, isMatched, onClick }) => {
         const isVisible = isFlipped || isMatched;
 
-        const buttonBaseClasses = "group relative h-24 sm:h-28 rounded-xl cursor-pointer [perspective:1000px] transition-transform duration-150";
-        const buttonStateClasses = isMatched ? "cursor-default" : "hover:-translate-y-1";
-
-        const flipperBaseClasses = "relative w-full h-full transition-transform duration-500 [transform-style:preserve-3d]";
-        const flipperStateClasses = isVisible ? "[transform:rotateY(180deg)]" : "";
-
-        const faceBaseClasses = "absolute w-full h-full flex items-center justify-center p-2 text-center rounded-xl border font-semibold select-none [backface-visibility:hidden]";
-
-        const frontClasses = `${faceBaseClasses} bg-white border-gray-200 shadow-md group-hover:shadow-lg`;
-
-        const backClasses = `${faceBaseClasses} [transform:rotateY(180deg)] text-sm sm:text-base text-gray-800`;
-        const backStateClasses = isMatched
-          ? "bg-green-100 border-green-500 shadow-lg shadow-green-500/20"
-          : "bg-indigo-50 border-indigo-400";
-
         return (
           React.createElement("button",
             {
               type: "button",
-              className: `${buttonBaseClasses} ${buttonStateClasses}`,
-              onClick: onClick,
-              "aria-pressed": isVisible,
-              "aria-label": `Memorykaart voor term ${isVisible ? card.text : 'verborgen'}`
+              className: "group relative h-24 sm:h-28 rounded-xl cursor-pointer [perspective:1000px] transition-transform duration-150 hover:-translate-y-1",
+              onClick,
+              "aria-pressed": isVisible
             },
-            React.createElement("div", { className: `${flipperBaseClasses} ${flipperStateClasses}` },
-              React.createElement("div", { className: frontClasses },
+            React.createElement("div", { className: `relative w-full h-full transition-transform duration-500 [transform-style:preserve-3d] ${isVisible ? "[transform:rotateY(180deg)]" : ""}` },
+              React.createElement("div", { className: "absolute w-full h-full flex items-center justify-center p-2 text-center rounded-xl border font-semibold select-none [backface-visibility:hidden] bg-white border-gray-200 shadow-md" },
                 React.createElement("span", { className: "text-3xl font-bold text-gray-500" }, "?")
               ),
-              React.createElement("div", { className: `${backClasses} ${backStateClasses}` },
+              React.createElement("div", { className: `absolute w-full h-full flex items-center justify-center p-2 text-center rounded-xl border font-semibold select-none [backface-visibility:hidden] [transform:rotateY(180deg)] text-sm sm:text-base ${isMatched ? "bg-green-100 border-green-500" : "bg-indigo-50 border-indigo-400"}` },
                 React.createElement("span", null, card.text)
               )
             )
@@ -186,9 +160,7 @@
           setFlippedIndices([]);
           setMatchedPairIds([]);
           setMoves(0);
-
           setScore(0);
-
           setLockBoard(false);
           setMessage({ text: 'Zoek steeds één Engelse en één Nederlandse term die bij elkaar horen.', type: 'info' });
         }, []);
@@ -201,23 +173,21 @@
           if (flippedIndices.length < 2) return;
 
           setLockBoard(true);
-          setMoves((prevMoves) => prevMoves + 1);
+          setMoves((prev) => prev + 1);
 
-          const [firstIndex, secondIndex] = flippedIndices;
-          const firstCard = deck[firstIndex];
-          const secondCard = deck[secondIndex];
+          const [a, b] = flippedIndices;
+          const first = deck[a];
+          const second = deck[b];
 
-          if (firstCard.pairId === secondCard.pairId && firstCard.lang !== secondCard.lang) {
+          if (first.pairId === second.pairId && first.lang !== second.lang) {
             playMatchSound();
-            setMessage({ text: 'Goed gedaan! Dat is een juiste combinatie.', type: 'info' });
             setTimeout(() => {
-              setMatchedPairIds((prev) => [...prev, firstCard.pairId]);
+              setMatchedPairIds(prev => [...prev, first.pairId]);
               setFlippedIndices([]);
               setLockBoard(false);
             }, 600);
           } else {
             playNoMatchSound();
-            setMessage({ text: 'Niet helemaal! Probeer deze combinatie te onthouden.', type: 'info' });
             setTimeout(() => {
               setFlippedIndices([]);
               setLockBoard(false);
@@ -225,113 +195,54 @@
           }
         }, [flippedIndices, deck]);
 
+        /* AUTOMATISCHE SCORE 100 BIJ ALLES GOED */
         useEffect(() => {
-          if (matchedPairIds.length > 0 && matchedPairIds.length === TERM_PAIRS.length) {
-            const finalScore = 100;
+          const allCorrect = matchedPairIds.length === TERM_PAIRS.length;
+          if (!allCorrect) return;
 
-            setScore(finalScore);
+          const finalScore = 100;
 
-            playWinSound();
-            setMessage({
-              text: `Top! Je hebt alle paren gevonden in ${moves} beurten. Score: ${finalScore}/100.`,
-              type: 'success',
-            });
-            setLockBoard(true);
+          if (score !== finalScore) setScore(finalScore);
 
-            if (!sentScoreRef.current) {
-              sentScoreRef.current = true;
-              sendScoreToPlatform(finalScore);
-            }
+          playWinSound();
+          setMessage({
+            text: `Top! Je hebt alle paren gevonden in ${moves} beurten. Score: ${finalScore}/100.`,
+            type: 'success',
+          });
+          setLockBoard(true);
+
+          if (!sentScoreRef.current) {
+            sentScoreRef.current = true;
+            sendScoreToPlatform(finalScore);
           }
-        }, [matchedPairIds, moves]);
+        }, [matchedPairIds, moves, score]);
+        /* EINDE LOGICA */
 
         const handleCardClick = (index) => {
-          if (lockBoard || flippedIndices.includes(index) || matchedPairIds.includes(deck[index].pairId)) {
-            return;
-          }
+          if (lockBoard || flippedIndices.includes(index) || matchedPairIds.includes(deck[index].pairId)) return;
           playFlipSound();
-          setFlippedIndices((prev) => [...prev, index]);
+          setFlippedIndices(prev => [...prev, index]);
         };
 
-        const revealedPairs = matchedPairIds.map(id => TERM_PAIRS[id - 1]);
-
-        return React.createElement("main", { className: "max-w-4xl w-full mx-auto p-4 sm:p-6 lg:p-8 text-gray-800" },
-          React.createElement("header", { className: "text-center sm:text-left" },
-            React.createElement("h1", { className: "text-2xl sm:text-3xl font-bold text-gray-900" }, "Memory: Match de termen!"),
-            React.createElement("p", { className: "mt-1 text-gray-600" },
-              React.createElement("strong", null, "Onderwerp:"), " Krachten op een helling & wrijvingscoëfficiënt", React.createElement("br", null),
-              React.createElement("strong", null, "Leerdoel:"), " Nederlandse en Engelse termen herkennen en vertalen"
+        return React.createElement("main", { className: "max-w-4xl w-full mx-auto p-4" },
+          React.createElement("div", { className: "grid grid-cols-2 sm:grid-cols-4 gap-3" },
+            deck.map((card, index) =>
+              React.createElement(Card, {
+                key: card.id,
+                card,
+                isFlipped: flippedIndices.includes(index),
+                isMatched: matchedPairIds.includes(card.pairId),
+                onClick: () => handleCardClick(index)
+              })
             )
           ),
-          React.createElement("div", { className: "bg-indigo-100 border-l-4 border-indigo-500 text-indigo-800 p-4 rounded-md my-6", role: "alert" },
-            React.createElement("p", { className: "font-bold" }, "Doel van het spel:"),
-            React.createElement("p", null, "Match de juiste vertaling van de termen. Een set bestaat altijd uit één Engelse kaart en één Nederlandse kaart.")
-          ),
-          React.createElement("section", { "aria-label": "Memoryspel" },
-            React.createElement("div", { className: "flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4" },
-              React.createElement("button", {
-                onClick: startNewGame,
-                className: "w-full sm:w-auto rounded-full px-6 py-2.5 text-sm font-semibold text-white bg-indigo-600 shadow-lg shadow-indigo-600/30 transition-all duration-150 hover:bg-indigo-700 hover:scale-105 hover:shadow-xl active:scale-100 active:shadow-md"
-              }, "Nieuw spel starten"),
-              React.createElement("div", { className: "flex items-center justify-center gap-x-6 text-sm text-gray-600 font-medium flex-wrap" },
-                React.createElement("span", null, "Beurten: ", React.createElement("strong", { className: "text-gray-900 text-base" }, moves)),
-                React.createElement("span", null, "Gevonden paren: ", React.createElement("strong", { className: "text-gray-900 text-base" }, matchedPairIds.length), "/", TERM_PAIRS.length),
-                React.createElement("span", null, "Score: ", React.createElement("strong", { className: "text-gray-900 text-base" }, score), "/100")
-              )
-            ),
-            React.createElement("div", { className: "grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4" },
-              deck.map((card, index) =>
-                React.createElement(Card, {
-                  key: card.id,
-                  card: card,
-                  isFlipped: flippedIndices.includes(index),
-                  isMatched: matchedPairIds.includes(card.pairId),
-                  onClick: () => handleCardClick(index)
-                })
-              )
-            ),
-            React.createElement("div", { className: `mt-4 text-center sm:text-left font-semibold min-h-[1.5em] ${message.type === 'success' ? 'text-green-700' : 'text-gray-600'}` }, message.text)
-          ),
-          React.createElement("section", { "aria-label": "Overzicht van termen", className: "mt-12" },
-            React.createElement("h2", { className: "text-xl font-bold text-gray-900" }, "Overzicht van gevonden termen"),
-            React.createElement("p", { className: "text-gray-600 mt-1 mb-3" }, "Elke combinatie die je vindt, verschijnt in dit overzicht."),
-            React.createElement("div", { className: "overflow-x-auto" },
-              React.createElement("table", { className: "w-full max-w-lg border-collapse text-sm" },
-                React.createElement("thead", null,
-                  React.createElement("tr", null,
-                    React.createElement("th", { className: "border border-gray-300 p-2 text-left bg-indigo-100 font-semibold" }, "Engels"),
-                    React.createElement("th", { className: "border border-gray-300 p-2 text-left bg-indigo-100 font-semibold" }, "Nederlands")
-                  )
-                ),
-                React.createElement("tbody", null,
-                  revealedPairs.length === 0 ? (
-                    React.createElement("tr", null,
-                      React.createElement("td", { colSpan: 2, className: "border border-gray-300 p-3 text-center text-gray-500 italic" }, "Gevonden paren verschijnen hier...")
-                    )
-                  ) : (
-                    revealedPairs.map((pair) => (
-                      React.createElement("tr", { key: pair.en, className: "bg-white animate-fade-in" },
-                        React.createElement("td", { className: "border border-gray-300 p-2 text-gray-900" }, pair.en),
-                        React.createElement("td", { className: "border border-gray-300 p-2 text-gray-900" }, pair.nl)
-                      )
-                    ))
-                  )
-                )
-              )
-            )
-          )
+          React.createElement("div", { className: "mt-4 text-center font-semibold" }, message.text),
+          React.createElement("div", { className: "mt-2 text-center" }, `Score: ${score}/100`)
         );
       };
 
-      const rootElement = document.getElementById('root');
-      if (!rootElement) {
-        throw new Error("Could not find root element to mount to");
-      }
-
-      const root = ReactDOM.createRoot(rootElement);
-      root.render(
-        React.createElement(React.StrictMode, null, React.createElement(App, null))
-      );
+      const root = ReactDOM.createRoot(document.getElementById('root'));
+      root.render(React.createElement(App));
     </script>
   </body>
 </html>
