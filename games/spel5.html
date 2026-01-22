@@ -11,7 +11,7 @@
     <style>
       body {
         font-family: 'Nunito', sans-serif;
-        background-color: #f1f5f9; /* slate-100 */
+        background-color: #f1f5f9;
       }
       @keyframes fadeInUp {
         from { opacity: 0; transform: translateY(20px); }
@@ -28,11 +28,24 @@
       import React, { StrictMode, useState, useCallback, useEffect, useRef } from 'https://esm.sh/react@18';
       import ReactDOM from 'https://esm.sh/react-dom@18/client';
 
+      // --- platform score bridge ---
+      function sendScoreToPlatform(score100) {
+        const params = new URLSearchParams(window.location.search);
+        const gameNum = Number(params.get('game')) || 5;
+
+        const safeScore = Math.max(0, Math.min(100, Math.round(Number(score100) || 0)));
+
+        window.parent.postMessage(
+          { type: 'GAME_SCORE', gameNum: gameNum, score: safeScore },
+          window.location.origin
+        );
+      }
+
       // --- constants.ts ---
       const TOTAL_LIVES = 3;
       const TOTAL_QUESTIONS = 10;
-      const QUESTION_TIME_LIMIT = 15; // Iets ruimer voor MBO
-      const BASE_POINTS_PER_QUESTION = 10; // 10 vragen * 10 punten = 100 max
+      const QUESTION_TIME_LIMIT = 15;
+      const BASE_POINTS_PER_QUESTION = 10;
 
       // --- components/icons/HeartIcon.tsx ---
       const HeartIcon = ({ filled = true }) => {
@@ -50,44 +63,44 @@
           }))
         );
       };
-      
+
       // --- components/Diagram.tsx ---
       const Diagram = ({ forceUp, forceDown }) => {
         const width = 400;
         const height = 250;
         const angleDegrees = 20;
         const angleRad = angleDegrees * (Math.PI / 180);
-      
+
         const slopeStartX = 30;
         const slopeEndX = width - 30;
         const slopeStartY = height - 50;
         const slopeEndY = slopeStartY - (slopeEndX - slopeStartX) * Math.tan(angleRad);
 
         const mountainPath = `M -5 250 L ${slopeStartX - 20} 250 L ${slopeStartX} ${slopeStartY} L ${slopeEndX} ${slopeEndY} L ${width + 5} ${slopeEndY} L ${width + 5} 250 Z`;
-      
+
         const cartHeight = 30;
         const wheelRadius = 8;
-      
+
         const cartX = width / 2;
         const cartBottomYOnSlope = slopeStartY - (cartX - slopeStartX) * Math.tan(angleRad);
         const cartTransformY = cartBottomYOnSlope - wheelRadius;
-        
+
         const cartBodyCenterY = cartTransformY - cartHeight / 2;
 
         const scaleFactor = 0.8;
         const fHellingLength = forceDown * scaleFactor;
         const fWrijvingLength = forceUp * scaleFactor;
-      
+
         const fHellingStartX = cartX;
         const fHellingStartY = cartBodyCenterY;
         const fHellingEndX = fHellingStartX - fHellingLength * Math.cos(angleRad);
         const fHellingEndY = fHellingStartY + fHellingLength * Math.sin(angleRad);
-      
+
         const fWrijvingStartX = cartX;
         const fWrijvingStartY = cartBodyCenterY;
         const fWrijvingEndX = fWrijvingStartX + fWrijvingLength * Math.cos(angleRad);
         const fWrijvingEndY = fWrijvingStartY - fWrijvingLength * Math.sin(angleRad);
-      
+
         return (
           React.createElement('div', { className: 'bg-white rounded-xl shadow-inner p-4 flex justify-center items-center overflow-hidden border border-slate-200' },
             React.createElement('svg', { width: width, height: height, viewBox: `0 0 ${width} ${height}`, className: 'rounded-lg' },
@@ -111,15 +124,13 @@
               ),
               React.createElement('rect', { width: '100%', height: '100%', fill: 'url(#skyGradient)' }),
               React.createElement('path', { d: mountainPath, fill: 'url(#mountainGradient)', stroke: '#15803d', strokeWidth: '1.5' }),
-      
-              // Karretje
+
               React.createElement('g', { transform: `translate(${cartX}, ${cartTransformY}) rotate(${-angleDegrees})` },
                 React.createElement('path', { d: 'M -25 -25 L 25 -25 L 20 -5 L -20 -5 Z', fill: '#f8fafc', stroke: '#64748b', strokeWidth: '2' }),
                 React.createElement('circle', { cx: '-15', cy: '0', r: wheelRadius, fill: '#334155' }),
                 React.createElement('circle', { cx: '15', cy: '0', r: wheelRadius, fill: '#334155' })
               ),
-      
-              // F Helling
+
               React.createElement('line', {
                 x1: fHellingStartX, y1: fHellingStartY,
                 x2: fHellingEndX, y2: fHellingEndY,
@@ -128,8 +139,7 @@
               React.createElement('text', {
                 x: fHellingEndX, y: fHellingEndY + 20, fill: '#1d4ed8', className: 'font-bold text-xs', textAnchor: 'middle'
               }, `Fh = ${forceDown}N`),
-      
-              // F Wrijving
+
               React.createElement('line', {
                 x1: fWrijvingStartX, y1: fWrijvingStartY,
                 x2: fWrijvingEndX, y2: fWrijvingEndY,
@@ -142,13 +152,13 @@
           )
         );
       };
-      
+
       // --- components/StatusBar.tsx ---
       const StatusBar = ({ lives, score, questionNumber, totalQuestions }) => {
         return (
           React.createElement('div', { className: 'flex justify-between items-center bg-white rounded-xl shadow-md p-4 w-full border border-slate-100' },
             React.createElement('div', { className: 'flex items-center space-x-2' },
-              React.createElement('div', { className: 'flex' },
+                        React.createElement('div', { className: 'flex' },
                 Array.from({ length: TOTAL_LIVES }).map((_, i) => React.createElement(HeartIcon, { key: i, filled: i < lives }))
               )
             ),
@@ -171,46 +181,46 @@
         const answeredRef = useRef(false);
 
         const translateAnswer = (answer) => {
-            if (answer === 'accelerate') return 'Versnellen';
-            if (answer === 'decelerate') return 'Vertragen';
-            return 'Constante snelheid';
+          if (answer === 'accelerate') return 'Versnellen';
+          if (answer === 'decelerate') return 'Vertragen';
+          return 'Constante snelheid';
         };
 
         const handleAnswer = useCallback((answer) => {
-            if (answeredRef.current) return;
-            answeredRef.current = true;
-            cancelAnimationFrame(animationFrameRef.current);
+          if (answeredRef.current) return;
+          answeredRef.current = true;
+          cancelAnimationFrame(animationFrameRef.current);
 
-            const isCorrect = question.correctAnswer === answer;
-            setFeedback({
-                correct: isCorrect,
-                message: isCorrect ? 'Helemaal juist!' : `Niet goed. Het juiste antwoord was: ${translateAnswer(question.correctAnswer)}`
-            });
+          const isCorrect = question.correctAnswer === answer;
+          setFeedback({
+            correct: isCorrect,
+            message: isCorrect ? 'Helemaal juist!' : `Niet goed. Het juiste antwoord was: ${translateAnswer(question.correctAnswer)}`
+          });
 
-            onAnswer(answer);
+          onAnswer(answer);
         }, [question, onAnswer]);
 
         useEffect(() => {
-            setTimeLeft(QUESTION_TIME_LIMIT);
-            setFeedback(null);
-            answeredRef.current = false;
-            startTimeRef.current = Date.now();
+          setTimeLeft(QUESTION_TIME_LIMIT);
+          setFeedback(null);
+          answeredRef.current = false;
+          startTimeRef.current = Date.now();
 
-            const tick = () => {
-                if (answeredRef.current) return;
-                const elapsed = (Date.now() - startTimeRef.current) / 1000;
-                const remaining = Math.max(0, QUESTION_TIME_LIMIT - elapsed);
-                setTimeLeft(remaining);
-                if (remaining === 0) {
-                    handleAnswer('timeout');
-                } else {
-                    animationFrameRef.current = requestAnimationFrame(tick);
-                }
-            };
-            animationFrameRef.current = requestAnimationFrame(tick);
-            return () => cancelAnimationFrame(animationFrameRef.current);
+          const tick = () => {
+            if (answeredRef.current) return;
+            const elapsed = (Date.now() - startTimeRef.current) / 1000;
+            const remaining = Math.max(0, QUESTION_TIME_LIMIT - elapsed);
+            setTimeLeft(remaining);
+            if (remaining === 0) {
+              handleAnswer('timeout');
+            } else {
+              animationFrameRef.current = requestAnimationFrame(tick);
+            }
+          };
+          animationFrameRef.current = requestAnimationFrame(tick);
+          return () => cancelAnimationFrame(animationFrameRef.current);
         }, [question.id, handleAnswer]);
-        
+
         const progressPercentage = (timeLeft / QUESTION_TIME_LIMIT) * 100;
 
         return (
@@ -227,23 +237,23 @@
                   })
                 ),
                 !feedback ?
-                React.createElement('div', { className: 'grid grid-cols-1 md:grid-cols-3 gap-4 pt-2' },
-                  React.createElement('button', {
-                    onClick: () => handleAnswer('accelerate'),
-                    className: 'bg-white border-2 border-blue-500 text-blue-600 font-black py-4 rounded-xl hover:bg-blue-500 hover:text-white transition-all shadow-md active:scale-95'
-                  }, 'Versnellen'),
-                  React.createElement('button', {
-                    onClick: () => handleAnswer('constant'),
-                    className: 'bg-white border-2 border-green-500 text-green-600 font-black py-4 rounded-xl hover:bg-green-500 hover:text-white transition-all shadow-md active:scale-95'
-                  }, 'Constant'),
-                  React.createElement('button', {
-                    onClick: () => handleAnswer('decelerate'),
-                    className: 'bg-white border-2 border-red-500 text-red-600 font-black py-4 rounded-xl hover:bg-red-500 hover:text-white transition-all shadow-md active:scale-95'
-                  }, 'Vertragen')
-                ) :
-                React.createElement('div', {
+                  React.createElement('div', { className: 'grid grid-cols-1 md:grid-cols-3 gap-4 pt-2' },
+                    React.createElement('button', {
+                      onClick: () => handleAnswer('accelerate'),
+                      className: 'bg-white border-2 border-blue-500 text-blue-600 font-black py-4 rounded-xl hover:bg-blue-500 hover:text-white transition-all shadow-md active:scale-95'
+                    }, 'Versnellen'),
+                    React.createElement('button', {
+                      onClick: () => handleAnswer('constant'),
+                      className: 'bg-white border-2 border-green-500 text-green-600 font-black py-4 rounded-xl hover:bg-green-500 hover:text-white transition-all shadow-md active:scale-95'
+                    }, 'Constant'),
+                    React.createElement('button', {
+                      onClick: () => handleAnswer('decelerate'),
+                      className: 'bg-white border-2 border-red-500 text-red-600 font-black py-4 rounded-xl hover:bg-red-500 hover:text-white transition-all shadow-md active:scale-95'
+                    }, 'Vertragen')
+                  ) :
+                  React.createElement('div', {
                     className: `p-6 rounded-xl text-xl font-black animate-fade-in-up shadow-lg ${feedback.correct ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`
-                }, feedback.message)
+                  }, feedback.message)
               )
             )
           )
@@ -257,7 +267,7 @@
             React.createElement('div', { className: 'bg-white p-8 md:p-12 rounded-3xl shadow-2xl max-w-md w-full text-center animate-fade-in-up' },
               React.createElement('div', { className: 'text-6xl mb-4' }, reason === 'lives' ? '❌' : '🏆'),
               React.createElement('h1', { className: 'text-4xl font-black text-slate-800 mb-2' }, reason === 'lives' ? 'Helaas!' : 'Geweldig!'),
-              React.createElement('p', { className: 'text-slate-600 mb-6 font-bold' }, 
+              React.createElement('p', { className: 'text-slate-600 mb-6 font-bold' },
                 reason === 'lives' ? 'Je levens zijn helaas op.' : 'Je hebt alle vragen beantwoord!'
               ),
               React.createElement('div', { className: 'bg-slate-100 rounded-2xl p-6 mb-8' },
@@ -282,6 +292,13 @@
         const [score, setScore] = useState(0);
         const [lives, setLives] = useState(TOTAL_LIVES);
 
+        const gameStatusRef = useRef(gameStatus);
+        const scoreRef = useRef(score);
+        const sentScoreRef = useRef(false);
+
+        useEffect(() => { gameStatusRef.current = gameStatus; }, [gameStatus]);
+        useEffect(() => { scoreRef.current = score; }, [score]);
+
         const generateQuestions = useCallback(() => {
           const newQuestions = [];
           const answerTypes = ['accelerate', 'constant', 'decelerate'];
@@ -289,14 +306,14 @@
             const correctAnswer = answerTypes[Math.floor(Math.random() * answerTypes.length)];
             let forceDown, forceUp;
             if (correctAnswer === 'accelerate') {
-                forceUp = Math.floor(Math.random() * 40) + 10;
-                forceDown = forceUp + Math.floor(Math.random() * 30) + 10;
+              forceUp = Math.floor(Math.random() * 40) + 10;
+              forceDown = forceUp + Math.floor(Math.random() * 30) + 10;
             } else if (correctAnswer === 'decelerate') {
-                forceDown = Math.floor(Math.random() * 40) + 10;
-                forceUp = forceDown + Math.floor(Math.random() * 30) + 10;
+              forceDown = Math.floor(Math.random() * 40) + 10;
+              forceUp = forceDown + Math.floor(Math.random() * 30) + 10;
             } else {
-                forceDown = Math.floor(Math.random() * 50) + 20;
-                forceUp = forceDown;
+              forceDown = Math.floor(Math.random() * 50) + 20;
+              forceUp = forceDown;
             }
             newQuestions.push({ id: i, forceDown, forceUp, correctAnswer });
           }
@@ -304,6 +321,7 @@
         }, []);
 
         const handleStartGame = () => {
+          sentScoreRef.current = false;
           setScore(0);
           setLives(TOTAL_LIVES);
           setCurrentQuestionIndex(0);
@@ -313,40 +331,50 @@
         };
 
         const handleAnswer = useCallback((answer) => {
-            const isCorrect = questions[currentQuestionIndex].correctAnswer === answer;
-            
-            setTimeout(() => {
-                if (isCorrect) {
-                    setScore(s => s + BASE_POINTS_PER_QUESTION);
-                } else {
-                    setLives(l => {
-                        const newLives = l - 1;
-                        if (newLives <= 0) {
-                            setGameOverReason('lives');
-                            setGameStatus('game-over');
-                        }
-                        return newLives;
-                    });
-                }
+          const q = questions[currentQuestionIndex];
+          if (!q) return;
 
-                if (gameStatus !== 'game-over') {
-                    if (currentQuestionIndex + 1 >= TOTAL_QUESTIONS) {
-                        setGameOverReason('completed');
-                        setGameStatus('game-over');
-                    } else {
-                        setLives(l => {
-                            if (l > 0) setCurrentQuestionIndex(i => i + 1);
-                            return l;
-                        });
-                    }
+          const isCorrect = q.correctAnswer === answer;
+
+          setTimeout(() => {
+            if (isCorrect) {
+              setScore(s => Math.min(100, s + BASE_POINTS_PER_QUESTION));
+            } else {
+              setLives(l => {
+                const newLives = l - 1;
+                if (newLives <= 0) {
+                  setGameOverReason('lives');
+                  setGameStatus('game-over');
                 }
-            }, 2000);
-        }, [currentQuestionIndex, questions, gameStatus]);
+                return newLives;
+              });
+            }
+
+            if (gameStatusRef.current !== 'game-over') {
+              if (currentQuestionIndex + 1 >= TOTAL_QUESTIONS) {
+                setGameOverReason('completed');
+                setGameStatus('game-over');
+              } else {
+                setLives(l => {
+                  if (l > 0) setCurrentQuestionIndex(i => i + 1);
+                  return l;
+                });
+              }
+            }
+          }, 2000);
+        }, [currentQuestionIndex, questions]);
+
+        useEffect(() => {
+          if (gameStatus === 'game-over' && !sentScoreRef.current) {
+            sentScoreRef.current = true;
+            sendScoreToPlatform(scoreRef.current);
+          }
+        }, [gameStatus]);
 
         if (gameStatus === 'start') {
           return (
             React.createElement('div', { className: 'min-h-screen bg-slate-100 flex flex-col items-center justify-center p-4' },
-              React.createElement('div', {className: 'bg-white p-10 md:p-16 rounded-3xl shadow-2xl max-w-2xl text-center border-b-8 border-indigo-200'},
+              React.createElement('div', { className: 'bg-white p-10 md:p-16 rounded-3xl shadow-2xl max-w-2xl text-center border-b-8 border-indigo-200' },
                 React.createElement('h1', { className: 'text-5xl md:text-7xl font-black text-slate-800 mb-6' }, 'Hellingproef'),
                 React.createElement('p', { className: 'text-xl text-slate-600 mb-10 leading-relaxed font-bold' },
                   'Versnelt het karretje of vertraagt het? Vergelijk de krachten en scoor maximaal 100 punten!'
@@ -362,15 +390,15 @@
 
         return React.createElement(React.Fragment, null,
           React.createElement(GameScreen, {
-              question: questions[currentQuestionIndex],
-              onAnswer: handleAnswer,
-              lives: lives,
-              score: score,
-              questionNumber: currentQuestionIndex + 1,
-              totalQuestions: TOTAL_QUESTIONS
+            question: questions[currentQuestionIndex],
+            onAnswer: handleAnswer,
+            lives: lives,
+            score: score,
+            questionNumber: currentQuestionIndex + 1,
+            totalQuestions: TOTAL_QUESTIONS
           }),
-          gameStatus === 'game-over' && React.createElement(GameOverOverlay, { 
-            score: score, 
+          gameStatus === 'game-over' && React.createElement(GameOverOverlay, {
+            score: score,
             onRestart: () => setGameStatus('start'),
             reason: gameOverReason
           })
