@@ -82,18 +82,12 @@
       };
 
       // --- From services/geminiService.ts ---
-      const API_KEY = process.env.API_KEY;
+      const API_KEY = null;
+      const ai = null;
 
-      if (!API_KEY) {
-        console.warn("Gemini API key not found. The 'Ask the Expert' feature will not work.");
-      }
-
-      const ai = new GoogleGenAI({ apiKey: API_KEY });
-
-      const getExplanation = async (topic) => {
-        if (!API_KEY) {
-          return "De expert is momenteel niet beschikbaar omdat de API-sleutel niet is geconfigureerd.";
-        }
+        const getExplanation = async (topic) => {
+          return "De expert staat uit in deze versie van het spel.";
+        };
 
         try {
           const response = await ai.models.generateContent({
