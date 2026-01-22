@@ -15,18 +15,10 @@
     </script>
     <style>
       @keyframes fade-in {
-        from {
-          opacity: 0;
-          transform: translateY(10px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
       }
-      .animate-fade-in {
-        animation: fade-in 0.5s ease-out forwards;
-      }
+      .animate-fade-in { animation: fade-in 0.5s ease-out forwards; }
     </style>
   </head>
   <body class="bg-gray-100">
@@ -100,9 +92,7 @@
         oscillator.stop(context.currentTime + duration);
       };
 
-      const playFlipSound = () => {
-        playSound('triangle', 440, 0.1, 0.05);
-      };
+      const playFlipSound = () => playSound('triangle', 440, 0.1, 0.05);
 
       const playMatchSound = () => {
         const context = getAudioContext();
@@ -111,9 +101,7 @@
         setTimeout(() => playSound('sine', 880, 0.15), 100);
       };
 
-      const playNoMatchSound = () => {
-        playSound('square', 220, 0.2);
-      };
+      const playNoMatchSound = () => playSound('square', 220, 0.2);
 
       const playWinSound = () => {
         const context = getAudioContext();
@@ -183,14 +171,6 @@
           return newArray;
         };
 
-        const calculateScore100 = useCallback((movesCount) => {
-          const optimalMoves = TERM_PAIRS.length;
-          const extraMoves = Math.max(0, movesCount - optimalMoves);
-          const penaltyPerExtraMove = 5;
-          const result = 100 - extraMoves * penaltyPerExtraMove;
-          return Math.max(0, Math.min(100, Math.round(result)));
-        }, []);
-
         const startNewGame = useCallback(() => {
           let uniqueId = 0;
           const newDeck = TERM_PAIRS.flatMap((pair, index) => {
@@ -206,7 +186,9 @@
           setFlippedIndices([]);
           setMatchedPairIds([]);
           setMoves(0);
+
           setScore(0);
+
           setLockBoard(false);
           setMessage({ text: 'Zoek steeds één Engelse en één Nederlandse term die bij elkaar horen.', type: 'info' });
         }, []);
@@ -245,14 +227,13 @@
 
         useEffect(() => {
           if (matchedPairIds.length > 0 && matchedPairIds.length === TERM_PAIRS.length) {
-            const finalMoves = moves;
-            const finalScore = calculateScore100(finalMoves);
+            const finalScore = 100;
 
             setScore(finalScore);
 
             playWinSound();
             setMessage({
-              text: `Top! Je hebt alle paren gevonden in ${finalMoves} beurten. Score: ${finalScore}/100.`,
+              text: `Top! Je hebt alle paren gevonden in ${moves} beurten. Score: ${finalScore}/100.`,
               type: 'success',
             });
             setLockBoard(true);
@@ -262,7 +243,7 @@
               sendScoreToPlatform(finalScore);
             }
           }
-        }, [matchedPairIds, moves, calculateScore100]);
+        }, [matchedPairIds, moves]);
 
         const handleCardClick = (index) => {
           if (lockBoard || flippedIndices.includes(index) || matchedPairIds.includes(deck[index].pairId)) {
