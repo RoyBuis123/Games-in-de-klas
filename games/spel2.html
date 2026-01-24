@@ -1,375 +1,390 @@
 <!DOCTYPE html>
 <html lang="nl">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Natuurkunde Termen Spel</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-      @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(-10px); }
-        to { opacity: 1; transform: translateY(0); }
-      }
-      .animate-fade-in {
-        animation: fadeIn 0.5s ease-out forwards;
-      }
-    </style>
-
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script type="importmap">
-    {
-      "imports": {
-        "react": "https://esm.sh/react@^19.2.3",
-        "react-dom/client": "https://esm.sh/react-dom@^19.2.3/client",
-        "@google/genai": "https://esm.sh/@google/genai@^1.37.0"
-      }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Natuurkunde Termen Spel</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
     }
-    </script>
+    .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
+  </style>
+
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script type="importmap">
+  {
+    "imports": {
+      "react": "https://esm.sh/react@^19.2.3",
+      "react-dom/client": "https://esm.sh/react-dom@^19.2.3/client"
+    }
+  }
+  </script>
 </head>
+
 <body class="bg-slate-900 text-slate-200">
-    <div id="root"></div>
+  <div id="root"></div>
 
-    <script type="text/babel" data-type="module">
-      import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-      import ReactDOM from 'react-dom/client';
-      import { GoogleGenAI, Type } from '@google/genai';
+  <script type="text/babel" data-type="module">
+    import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+    import ReactDOM from 'react-dom/client';
 
-      function sendScoreToPlatform(score100) {
-        const params = new URLSearchParams(window.location.search);
-        const raw = params.get('game');
-        const gameNum = raw !== null && raw !== '' ? Number(raw) : null;
+    function sendScoreToPlatform(score100) {
+      const params = new URLSearchParams(window.location.search);
+      const raw = params.get('game');
+      const gameNum = raw !== null && raw !== '' ? Number(raw) : null;
 
-        const safeScore = Math.max(0, Math.min(100, Math.round(Number(score100) || 0)));
+      const safeScore = Math.max(0, Math.min(100, Math.round(Number(score100) || 0)));
 
-        window.parent.postMessage(
-          { type: 'GAME_SCORE', gameNum: Number.isFinite(gameNum) ? gameNum : null, score: safeScore },
-          window.location.origin
-        );
+      window.parent.postMessage(
+        { type: 'GAME_SCORE', gameNum: Number.isFinite(gameNum) ? gameNum : null, score: safeScore },
+        window.location.origin
+      );
+    }
+
+    const PHYSICS_TERMS = [
+      {
+        term: "inclined plane",
+        explanation: "Een plat oppervlak dat onder een hoek helt ten opzichte van de horizontaal, waardoor een component van de zwaartekracht langs het oppervlak werkt.",
+        keywords: ["hellend", "vlak", "hoek", "horizontaal", "zwaartekracht", "component", "langs", "oppervlak"]
+      },
+      {
+        term: "angle",
+        explanation: "De maat voor de helling tussen twee lijnen of oppervlakken, vaak uitgedrukt in graden of radialen.",
+        keywords: ["maat", "helling", "lijnen", "oppervlak", "graden", "radialen", "hoek"]
+      },
+      {
+        term: "distance",
+        explanation: "De totale lengte van de weg die een object heeft afgelegd, gemeten in lengte-eenheden (bijv. meters).",
+        keywords: ["totale", "lengte", "weg", "afgelegd", "meters", "afstand", "eenheden"]
+      },
+      {
+        term: "speed",
+        explanation: "De snelheid waarmee de afstand in de tijd verandert (v = d/t), zonder rekening te houden met de richting.",
+        keywords: ["snelheid", "afstand", "tijd", "richting", "verandert", "v", "d", "t"]
+      },
+      {
+        term: "constant speed",
+        explanation: "Een beweging waarbij de snelheid in de loop van de tijd onveranderd blijft.",
+        keywords: ["beweging", "snelheid", "tijd", "onveranderd", "constant", "blijft"]
+      },
+      {
+        term: "acceleration",
+        explanation: "De mate van verandering van snelheid met betrekking tot tijd (a = Δv/Δt).",
+        keywords: ["verandering", "snelheid", "tijd", "versnelling", "a", "dv", "dt", "delta"]
+      },
+      {
+        term: "deceleration",
+        explanation: "Een versnelling die de grootte van de snelheid vermindert; een negatieve versnelling ten opzichte van de bewegingsrichting.",
+        keywords: ["versnelling", "vermindert", "snelheid", "negatief", "bewegingsrichting", "afremmen", "vertraging"]
+      },
+      {
+        term: "friction coefficient",
+        explanation: "Een dimensieloze grootheid die de verhouding beschrijft tussen de wrijvingskracht en de normaalkracht tussen twee oppervlakken (μ = F_f / F_n).",
+        keywords: ["dimensieloos", "verhouding", "wrijvingskracht", "normaalkracht", "oppervlakken", "mu", "ff", "fn"]
+      }
+    ];
+
+    const shuffleArray = (array) => {
+      return [...array].sort(() => Math.random() - 0.5);
+    };
+
+    const normalizeText = (s) => {
+      return String(s || "")
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}\s]/gu, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    };
+
+    const localCheck = (userText, termObj) => {
+      const user = normalizeText(userText);
+      const kws = (termObj.keywords || []).map(normalizeText).filter(Boolean);
+
+      if (!user) {
+        return { isCorrect: false, feedback: "Je hebt niets ingevuld. Schrijf een korte uitleg in je eigen woorden." };
       }
 
-      const PHYSICS_TERMS = [
-        {
-          term: "inclined plane",
-          explanation: "Een plat oppervlak dat onder een hoek helt ten opzichte van de horizontaal, waardoor een component van de zwaartekracht langs het oppervlak werkt."
-        },
-        {
-          term: "angle",
-          explanation: "De maat voor de helling tussen twee lijnen of oppervlakken, vaak uitgedrukt in graden of radialen."
-        },
-        {
-          term: "distance",
-          explanation: "De totale lengte van de weg die een object heeft afgelegd, gemeten in lengte-eenheden (bijv. meters)."
-        },
-        {
-          term: "speed",
-          explanation: "De snelheid waarmee de afstand in de tijd verandert (v = d/t), zonder rekening te houden met de richting."
-        },
-        {
-          term: "constant speed",
-          explanation: "Een beweging waarbij de snelheid in de loop van de tijd onveranderd blijft."
-        },
-        {
-          term: "acceleration",
-          explanation: "De mate van verandering van snelheid met betrekking tot tijd (a = Δv/Δt)."
-        },
-        {
-          term: "deceleration",
-          explanation: "Een versnelling die de grootte van de snelheid vermindert; een negatieve versnelling ten opzichte van de bewegingsrichting."
-        },
-        {
-          term: "friction coefficient",
-          explanation: "Een dimensieloze grootheid die de verhouding beschrijft tussen de wrijvingskracht en de normaalkracht tussen twee oppervlakken (μ = F_f / F_n)."
-        }
-      ];
+      let hits = 0;
+      for (const k of kws) {
+        if (k.length < 3) continue;
+        if (user.includes(k)) hits++;
+      }
 
-      const shuffleArray = (array) => {
-        return [...array].sort(() => Math.random() - 0.5);
+      const needed = Math.max(2, Math.ceil(kws.length * 0.35));
+      const isCorrect = hits >= needed;
+
+      if (isCorrect) {
+        return { isCorrect: true, feedback: "Goed. Je noemt genoeg kernwoorden die bij dit begrip horen." };
+      }
+
+      return {
+        isCorrect: false,
+        feedback: "Nog niet. Noem meer kernpunten uit de definitie. Denk aan de belangrijkste woorden uit de modeluitleg."
+      };
+    };
+
+    const AnswersModal = ({ onClose }) => (
+      <div className="fixed inset-0 bg-slate-900/80 flex items-center justify-center p-4 z-50 animate-fade-in">
+        <div className="bg-slate-800 rounded-xl shadow-2xl p-6 md:p-8 max-w-2xl w-full max-h-[80vh] overflow-y-auto relative">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-2xl font-bold text-emerald-400">Alle Termen en Uitleg</h2>
+            <button
+              onClick={onClose}
+              className="text-slate-400 hover:text-white transition-colors"
+              aria-label="Sluit venster"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <ul className="space-y-4">
+            {PHYSICS_TERMS.map((item, index) => (
+              <li key={index} className="bg-slate-700/50 p-4 rounded-lg">
+                <h3 className="font-bold text-lg text-white capitalize">{item.term}</h3>
+                <p className="text-slate-300 mt-1">{item.explanation}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    );
+
+    const App = () => {
+      const [terms, setTerms] = useState([]);
+      const [currentTermIndex, setCurrentTermIndex] = useState(0);
+      const [userExplanation, setUserExplanation] = useState('');
+      const [showModelExplanation, setShowModelExplanation] = useState(false);
+      const [isFinished, setIsFinished] = useState(false);
+      const [score, setScore] = useState(0);
+      const [isLoading, setIsLoading] = useState(false);
+      const [feedback, setFeedback] = useState(null);
+      const [showAnswers, setShowAnswers] = useState(false);
+
+      const sentScoreRef = useRef(false);
+      const scoreRef = useRef(0);
+
+      useEffect(() => { scoreRef.current = score; }, [score]);
+
+      const TOTAL = PHYSICS_TERMS.length;
+
+      const POINTS_PER_TERM = useMemo(() => {
+        const base = Math.floor(100 / TOTAL);
+        return base;
+      }, [TOTAL]);
+
+      const LAST_POINTS = useMemo(() => {
+        return 100 - POINTS_PER_TERM * (TOTAL - 1);
+      }, [POINTS_PER_TERM, TOTAL]);
+
+      const startGame = useCallback(() => {
+        setTerms(shuffleArray(PHYSICS_TERMS));
+        setCurrentTermIndex(0);
+        setUserExplanation('');
+        setShowModelExplanation(false);
+        setIsFinished(false);
+        setScore(0);
+        setFeedback(null);
+        setIsLoading(false);
+        sentScoreRef.current = false;
+      }, []);
+
+      useEffect(() => { startGame(); }, [startGame]);
+
+      const finishAndSendScore = useCallback((finalScore) => {
+        if (sentScoreRef.current) return;
+        sentScoreRef.current = true;
+        sendScoreToPlatform(finalScore);
+      }, []);
+
+      useEffect(() => {
+        if (isFinished) {
+          finishAndSendScore(scoreRef.current);
+        }
+      }, [isFinished, finishAndSendScore]);
+
+      const handleCheckAnswer = async () => {
+        if (!userExplanation.trim()) return;
+
+        setIsLoading(true);
+        setFeedback(null);
+
+        try {
+          const currentTerm = terms[currentTermIndex];
+          const result = localCheck(userExplanation, currentTerm);
+
+          if (result.isCorrect) {
+            const isLast = currentTermIndex >= TOTAL - 1;
+            setScore(prev => {
+              const add = isLast ? LAST_POINTS : POINTS_PER_TERM;
+              const next = prev + add;
+              return Math.max(0, Math.min(100, Math.round(next)));
+            });
+          }
+
+          setFeedback({ isCorrect: !!result.isCorrect, text: result.feedback });
+          setShowModelExplanation(true);
+
+        } catch (error) {
+          console.error("Local check error:", error);
+          setFeedback({ isCorrect: false, text: "Er ging iets mis bij het controleren. Je mag doorgaan." });
+          setShowModelExplanation(true);
+        } finally {
+          setIsLoading(false);
+        }
       };
 
-      const AnswersModal = ({ onClose }) => (
-        <div className="fixed inset-0 bg-slate-900/80 flex items-center justify-center p-4 z-50 animate-fade-in">
-            <div className="bg-slate-800 rounded-xl shadow-2xl p-6 md:p-8 max-w-2xl w-full max-h-[80vh] overflow-y-auto relative">
-                <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-2xl font-bold text-emerald-400">Alle Termen en Uitleg</h2>
-                    <button
-                        onClick={onClose}
-                        className="text-slate-400 hover:text-white transition-colors"
-                        aria-label="Sluit venster"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
-                </div>
-                <ul className="space-y-4">
-                    {PHYSICS_TERMS.map((item, index) => (
-                        <li key={index} className="bg-slate-700/50 p-4 rounded-lg">
-                            <h3 className="font-bold text-lg text-white capitalize">{item.term}</h3>
-                            <p className="text-slate-300 mt-1">{item.explanation}</p>
-                        </li>
-                    ))}
-                </ul>
-            </div>
-        </div>
-      );
-
-      const App = () => {
-        const [terms, setTerms] = useState([]);
-        const [currentTermIndex, setCurrentTermIndex] = useState(0);
-        const [userExplanation, setUserExplanation] = useState('');
-        const [showModelExplanation, setShowModelExplanation] = useState(false);
-        const [isFinished, setIsFinished] = useState(false);
-        const [score, setScore] = useState(0);
-        const [isLoading, setIsLoading] = useState(false);
-        const [feedback, setFeedback] = useState(null);
-        const [showAnswers, setShowAnswers] = useState(false);
-
-        const sentScoreRef = useRef(false);
-        const scoreRef = useRef(0);
-
-        useEffect(() => { scoreRef.current = score; }, [score]);
-
-        const TOTAL = PHYSICS_TERMS.length;
-        const POINTS_PER_TERM = useMemo(() => {
-          const base = Math.floor(100 / TOTAL);
-          return base;
-        }, [TOTAL]);
-        const LAST_POINTS = useMemo(() => {
-          return 100 - POINTS_PER_TERM * (TOTAL - 1);
-        }, [POINTS_PER_TERM, TOTAL]);
-
-        const startGame = useCallback(() => {
-          setTerms(shuffleArray(PHYSICS_TERMS));
-          setCurrentTermIndex(0);
+      const handleNextTerm = () => {
+        if (currentTermIndex < terms.length - 1) {
+          setCurrentTermIndex(prevIndex => prevIndex + 1);
           setUserExplanation('');
           setShowModelExplanation(false);
-          setIsFinished(false);
-          setScore(0);
           setFeedback(null);
-          setIsLoading(false);
-          sentScoreRef.current = false;
-        }, []);
-
-        useEffect(() => {
-          startGame();
-        }, [startGame]);
-
-        const finishAndSendScore = useCallback((finalScore) => {
-          if (sentScoreRef.current) return;
-          sentScoreRef.current = true;
-          sendScoreToPlatform(finalScore);
-        }, []);
-
-        useEffect(() => {
-          if (isFinished) {
-            finishAndSendScore(scoreRef.current);
-          }
-        }, [isFinished, finishAndSendScore]);
-
-        const handleCheckAnswer = async () => {
-          if (!userExplanation.trim()) return;
-
-          setIsLoading(true);
-          setFeedback(null);
-
-          const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-          const currentTerm = terms[currentTermIndex];
-
-          const systemInstruction = `You are a helpful physics teacher evaluating a student's answer in Dutch.
-Compare the student's explanation with the provided model answer.
-The student's answer does not need to be a word-for-word match, but it must capture the core physics concept correctly.
-Respond with a JSON object containing two fields:
-1. "isCorrect": a boolean (true if the student's answer is conceptually correct, otherwise false).
-2. "feedback": a short string in Dutch explaining why the answer is correct or incorrect.`;
-
-          const prompt = `Term: "${currentTerm.term}". Model Answer: "${currentTerm.explanation}". Student's Answer: "${userExplanation}".`;
-
-          try {
-            const response = await ai.models.generateContent({
-              model: 'gemini-3-flash-preview',
-              contents: prompt,
-              config: {
-                systemInstruction,
-                responseMimeType: "application/json",
-                responseSchema: {
-                  type: Type.OBJECT,
-                  properties: {
-                    isCorrect: { type: Type.BOOLEAN },
-                    feedback: { type: Type.STRING },
-                  },
-                  required: ["isCorrect", "feedback"],
-                },
-              },
-            });
-
-            const result = JSON.parse(response.text.trim());
-
-            if (result.isCorrect) {
-              const isLast = currentTermIndex >= TOTAL - 1;
-              setScore(prev => {
-                const add = isLast ? LAST_POINTS : POINTS_PER_TERM;
-                const next = prev + add;
-                return Math.max(0, Math.min(100, Math.round(next)));
-              });
-            }
-
-            setFeedback({ isCorrect: !!result.isCorrect, text: result.feedback });
-
-          } catch (error) {
-            console.error("Error checking answer with AI:", error);
-            setFeedback({ isCorrect: false, text: "Er is een fout opgetreden bij het controleren van het antwoord. Ga door naar de volgende vraag." });
-          } finally {
-            setShowModelExplanation(true);
-            setIsLoading(false);
-          }
-        };
-
-        const handleNextTerm = () => {
-          if (currentTermIndex < terms.length - 1) {
-            setCurrentTermIndex(prevIndex => prevIndex + 1);
-            setUserExplanation('');
-            setShowModelExplanation(false);
-            setFeedback(null);
-          } else {
-            setIsFinished(true);
-          }
-        };
-
-        const handleKeyDown = (e) => {
-          if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            if (!showModelExplanation && !isLoading && userExplanation.trim() !== '') {
-              handleCheckAnswer();
-            }
-          }
-        };
-
-        if (terms.length === 0) {
-          return (
-            <div className="flex items-center justify-center min-h-screen bg-slate-900">
-              <div className="text-xl text-slate-400">Laden...</div>
-            </div>
-          );
+        } else {
+          setIsFinished(true);
         }
-
-        if (isFinished) {
-          const safeScore = Math.max(0, Math.min(100, Math.round(score)));
-          const hasPassed = safeScore >= 75;
-
-          return (
-            <div className="flex flex-col items-center justify-center min-h-screen bg-slate-900 p-4">
-              <div className="bg-slate-800 rounded-xl shadow-2xl p-8 text-center max-w-md w-full">
-                <h1 className={`text-4xl font-bold mb-4 ${hasPassed ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {hasPassed ? 'Geslaagd!' : 'Gezakt'}
-                </h1>
-                <p className="text-slate-300 mb-2 text-lg">Je score is: <span className="font-bold">{safeScore} / 100</span></p>
-                <p className="text-slate-300 mb-6">
-                  {hasPassed
-                    ? 'Goed gedaan! Je beheerst de basisconcepten.'
-                    : 'Helaas, dat is nog niet voldoende. Probeer het opnieuw om de stof beter te begrijpen.'}
-                </p>
-                <button
-                  onClick={startGame}
-                  className="w-full bg-emerald-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-emerald-500 transition-colors duration-200"
-                >
-                  Opnieuw Spelen
-                </button>
-              </div>
-            </div>
-          );
-        }
-
-        const currentTerm = terms[currentTermIndex];
-        const safeScoreLive = Math.max(0, Math.min(100, Math.round(score)));
-
-        return (
-          <main className="flex flex-col items-center justify-center min-h-screen bg-slate-900 p-4 font-sans">
-             {showAnswers && <AnswersModal onClose={() => setShowAnswers(false)} />}
-            <div className="w-full max-w-2xl bg-slate-800 rounded-xl shadow-2xl p-6 md:p-8 space-y-6">
-              <header className="flex justify-between items-center">
-                <h1 className="text-2xl md:text-3xl font-bold text-emerald-400">Natuurkunde Termen</h1>
-                <div className="flex items-center space-x-4">
-                  <div className="text-lg font-bold text-slate-300">
-                      Score: <span className="text-emerald-400 w-16 inline-block">{safeScoreLive}</span>
-                  </div>
-                  <div className="text-sm font-medium text-slate-400 bg-slate-700 px-3 py-1 rounded-full">
-                    {currentTermIndex + 1} / {terms.length}
-                  </div>
-                </div>
-              </header>
-
-              <div className="bg-slate-700/50 p-6 rounded-lg">
-                <h2 className="text-3xl md:text-4xl font-semibold text-white capitalize mb-2">{currentTerm.term}</h2>
-              </div>
-
-              <div className="space-y-4">
-                <label htmlFor="user-explanation" className="block text-lg font-medium text-slate-300">
-                  Jouw uitleg:
-                </label>
-                <textarea
-                  id="user-explanation"
-                  rows="4"
-                  value={userExplanation}
-                  onChange={(e) => setUserExplanation(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Schrijf hier je uitleg in je eigen woorden..."
-                  className="w-full p-3 bg-slate-900 border-2 border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors"
-                  disabled={showModelExplanation || isLoading}
-                />
-              </div>
-
-              {showModelExplanation && (
-                <div className="space-y-4">
-                  {feedback && (
-                    <div className={`border p-4 rounded-lg animate-fade-in ${feedback.isCorrect ? 'bg-green-900/30 border-green-500/50' : 'bg-red-900/30 border-red-500/50'}`}>
-                      <h3 className={`text-lg font-semibold mb-2 ${feedback.isCorrect ? 'text-green-400' : 'text-red-400'}`}>
-                        {feedback.isCorrect ? 'Correct!' : 'Incorrect'}
-                      </h3>
-                      <p className="text-slate-300">{feedback.text}</p>
-                    </div>
-                  )}
-                  <div className="bg-slate-700/50 p-4 rounded-lg animate-fade-in">
-                    <h3 className="text-lg font-semibold text-slate-300 mb-2">Modeluitleg:</h3>
-                    <p className="text-slate-300">{currentTerm.explanation}</p>
-                  </div>
-                </div>
-              )}
-
-              <div className="pt-4">
-                {!showModelExplanation ? (
-                  <button
-                    onClick={handleCheckAnswer}
-                    disabled={userExplanation.trim() === '' || isLoading}
-                    className="w-full bg-emerald-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-emerald-500 transition-colors duration-200 disabled:bg-slate-600 disabled:cursor-not-allowed"
-                  >
-                    {isLoading ? 'Beoordelen...' : 'Controleer antwoord'}
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleNextTerm}
-                    className="w-full bg-slate-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-slate-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-slate-500 transition-colors duration-200"
-                  >
-                    {currentTermIndex === terms.length - 1 ? 'Voltooien' : 'Volgende Term'}
-                  </button>
-                )}
-              </div>
-            </div>
-             <footer className="text-center text-slate-500 mt-8 text-sm space-y-2"></footer>
-          </main>
-        );
       };
 
-      const rootElement = document.getElementById('root');
-      if (!rootElement) {
-        throw new Error("Could not find root element to mount to");
+      const handleKeyDown = (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          if (!showModelExplanation && !isLoading && userExplanation.trim() !== '') {
+            handleCheckAnswer();
+          }
+        }
+      };
+
+      if (terms.length === 0) {
+        return (
+          <div className="flex items-center justify-center min-h-screen bg-slate-900">
+            <div className="text-xl text-slate-400">Laden...</div>
+          </div>
+        );
       }
 
-      const root = ReactDOM.createRoot(rootElement);
-      root.render(
-        <React.StrictMode>
-          <App />
-        </React.StrictMode>
+      if (isFinished) {
+        const safeScore = Math.max(0, Math.min(100, Math.round(score)));
+        const hasPassed = safeScore >= 75;
+
+        return (
+          <div className="flex flex-col items-center justify-center min-h-screen bg-slate-900 p-4">
+            <div className="bg-slate-800 rounded-xl shadow-2xl p-8 text-center max-w-md w-full">
+              <h1 className={`text-4xl font-bold mb-4 ${hasPassed ? 'text-emerald-400' : 'text-red-400'}`}>
+                {hasPassed ? 'Geslaagd!' : 'Gezakt'}
+              </h1>
+              <p className="text-slate-300 mb-2 text-lg">
+                Je score is: <span className="font-bold">{safeScore} / 100</span>
+              </p>
+              <p className="text-slate-300 mb-6">
+                {hasPassed
+                  ? 'Goed gedaan! Je beheerst de basisconcepten.'
+                  : 'Helaas, dat is nog niet voldoende. Probeer het opnieuw om de stof beter te begrijpen.'}
+              </p>
+              <button
+                onClick={startGame}
+                className="w-full bg-emerald-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-emerald-500 transition-colors duration-200"
+              >
+                Opnieuw Spelen
+              </button>
+            </div>
+          </div>
+        );
+      }
+
+      const currentTerm = terms[currentTermIndex];
+      const safeScoreLive = Math.max(0, Math.min(100, Math.round(score)));
+
+      return (
+        <main className="flex flex-col items-center justify-center min-h-screen bg-slate-900 p-4 font-sans">
+          {showAnswers && <AnswersModal onClose={() => setShowAnswers(false)} />}
+
+          <div className="w-full max-w-2xl bg-slate-800 rounded-xl shadow-2xl p-6 md:p-8 space-y-6">
+            <header className="flex justify-between items-center">
+              <h1 className="text-2xl md:text-3xl font-bold text-emerald-400">Natuurkunde Termen</h1>
+              <div className="flex items-center space-x-4">
+                <div className="text-lg font-bold text-slate-300">
+                  Score: <span className="text-emerald-400 w-16 inline-block">{safeScoreLive}</span>
+                </div>
+                <div className="text-sm font-medium text-slate-400 bg-slate-700 px-3 py-1 rounded-full">
+                  {currentTermIndex + 1} / {terms.length}
+                </div>
+              </div>
+            </header>
+
+            <div className="bg-slate-700/50 p-6 rounded-lg">
+              <h2 className="text-3xl md:text-4xl font-semibold text-white capitalize mb-2">{currentTerm.term}</h2>
+            </div>
+
+            <div className="space-y-4">
+              <label htmlFor="user-explanation" className="block text-lg font-medium text-slate-300">
+                Jouw uitleg:
+              </label>
+              <textarea
+                id="user-explanation"
+                rows="4"
+                value={userExplanation}
+                onChange={(e) => setUserExplanation(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Schrijf hier je uitleg in je eigen woorden..."
+                className="w-full p-3 bg-slate-900 border-2 border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors"
+                disabled={showModelExplanation || isLoading}
+              />
+            </div>
+
+            {showModelExplanation && (
+              <div className="space-y-4">
+                {feedback && (
+                  <div className={`border p-4 rounded-lg animate-fade-in ${feedback.isCorrect ? 'bg-green-900/30 border-green-500/50' : 'bg-red-900/30 border-red-500/50'}`}>
+                    <h3 className={`text-lg font-semibold mb-2 ${feedback.isCorrect ? 'text-green-400' : 'text-red-400'}`}>
+                      {feedback.isCorrect ? 'Correct!' : 'Incorrect'}
+                    </h3>
+                    <p className="text-slate-300">{feedback.text}</p>
+                  </div>
+                )}
+                <div className="bg-slate-700/50 p-4 rounded-lg animate-fade-in">
+                  <h3 className="text-lg font-semibold text-slate-300 mb-2">Modeluitleg:</h3>
+                  <p className="text-slate-300">{currentTerm.explanation}</p>
+                </div>
+              </div>
+            )}
+
+            <div className="pt-4">
+              {!showModelExplanation ? (
+                <button
+                  onClick={handleCheckAnswer}
+                  disabled={userExplanation.trim() === '' || isLoading}
+                  className="w-full bg-emerald-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-emerald-500 transition-colors duration-200 disabled:bg-slate-600 disabled:cursor-not-allowed"
+                >
+                  {isLoading ? 'Beoordelen...' : 'Controleer antwoord'}
+                </button>
+              ) : (
+                <button
+                  onClick={handleNextTerm}
+                  className="w-full bg-slate-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-slate-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-slate-500 transition-colors duration-200"
+                >
+                  {currentTermIndex === terms.length - 1 ? 'Voltooien' : 'Volgende Term'}
+                </button>
+              )}
+            </div>
+          </div>
+
+          <footer className="text-center text-slate-500 mt-8 text-sm space-y-2"></footer>
+        </main>
       );
-    </script>
+    };
+
+    const rootElement = document.getElementById('root');
+    if (!rootElement) throw new Error("Could not find root element to mount to");
+
+    const root = ReactDOM.createRoot(rootElement);
+    root.render(
+      <React.StrictMode>
+        <App />
+      </React.StrictMode>
+    );
+  </script>
 </body>
 </html>
